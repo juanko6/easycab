@@ -39,5 +39,7 @@ si se apaga el sensor, el EC_DE queda esperando reconexion
 
 ya en este momento estamos con conexion de sockets y kafka
 
-
+para enviar una solicitud del cliente se debe de enviar asi:
+py EC_Customer.py 192.168.1.147 9092 101 "f18"
+ip-broker puerto-broker id-customer direccion-destino
 
