@@ -7,15 +7,15 @@ KAFKA_HOME%\config\server.properties (se debe de configurar IP visible por todos
 
 Nota: se tiene que ejecutar en primer lugar zookeeper y en segundo lugar Kafka broker
 
-iniciar zookeeper 
+iniciar zookeeper (1 terminal cmd)
 cd %KAFKA_HOME%
 %KAFKA_HOME%\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties
 
-iniciando broker
+iniciando broker (2 terminal cmd)
 cd %KAFKA_HOME%
 %KAFKA_HOME%\bin\windows\kafka-server-start.bat .\config\server.properties
 
-crear topic para solicitudes de clientes:
+crear topic para solicitudes de clientes: (3 terminal cmd)
 cd %KAFKA_HOME%
 %KAFKA_HOME%\bin\windows\kafka-topics.bat --create --topic solicitudes-clientes --bootstrap-server 192.168.1.147:9092
 
@@ -23,7 +23,13 @@ Crear el topic para estados de taxis:
 cd %KAFKA_HOME%
 %KAFKA_HOME%\bin\windows\kafka-topics.bat --create --topic estados-taxis --bootstrap-server 192.168.1.147:9092
 
+Listar topics creados
+cd %KAFKA_HOME%
+%KAFKA_HOME%\bin\windows\kafka-topics.bat --list --bootstrap-server 192.168.1.147:9092
 
+Ver topic ingresando a kafka
+cd %KAFKA_HOME%
+%KAFKA_HOME%\bin\windows\kafka-console-consumer.bat --bootstrap-server 192.168.1.147:9092 --topic NOMBREDELTOPIC --from-beginning
 
 iniciar los componentes EC_Central, EC_DE EC_S
 
@@ -39,7 +45,7 @@ si se apaga el sensor, el EC_DE queda esperando reconexion
 
 ya en este momento estamos con conexion de sockets y kafka
 
-para enviar una solicitud del cliente se debe de enviar asi:
+Enviar una solicitud del cliente se debe de enviar asi:
 py EC_Customer.py 192.168.1.147 9092 101 "f18"
 ip-broker puerto-broker id-customer direccion-destino
 
