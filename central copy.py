@@ -10,69 +10,35 @@ from dashboard import Dashboard
 
 BOOTSTRAP_SERVER = '192.168.1.147:9092'
 GROUP_ID = 'central-group'
-REFRESH_INTERVAL = 2  # Intervalo en segundos para verificar nuevos topics
+REFRESH_INTERVAL = 10  # Intervalo en segundos para verificar nuevos topics
 HEADER = 64
 FORMAT = 'utf-8'
 FIN = "FIN"
 FICHERO_TAXIS = "taxis_disponibles.txt"
 FICHERO_MAPA = "mapa_ciudad.txt"
 FICHERO_CLIENTES = "clientes_solicitudes.txt"
-DB_TAXIS = "taxis_db.txt"  # Fichero que actuará como base de datos
 
 # Lista de taxis disponibles y taxis autenticados
 taxis_disponibles = {}
 taxi_ids = {}  # Taxi_ID : Conexión
-nuevos_estados = {} 
 
 
-# Función para escribir las posiciones y estados de los taxis en el fichero
-def guardar_en_fichero(taxi_id, posicion=None, estado=None):
-    lineas = []
-    taxi_encontrado = False
-
-    try:
-        with open(DB_TAXIS, "r") as file:
-            lineas = file.readlines()
-    except FileNotFoundError:
-        with open(DB_TAXIS, "w") as file:
-            file.write("TaxiID,Posicion,Estado\n")
-        lineas = ["TaxiID,Posicion,Estado\n"]
-
-    for idx, linea in enumerate(lineas):
-        if linea.startswith(f"{taxi_id},"):
-            taxi_encontrado = True
-            lineas[idx] = f"{taxi_id},[{int(posicion[0])},{int(posicion[1])}],{estado}\n"
-            break
-
-    if not taxi_encontrado:
-        posicion_str = f"[{int(posicion[0])},{int(posicion[1])}]" if posicion else "[0,0]"
-        estado_str = estado if estado else "desconocido"
-        lineas.append(f"{taxi_id},{posicion_str},{estado_str}\n")
-
-    with open(DB_TAXIS, "w") as file:
-        file.writelines(lineas)
-
-    print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
-
-
-# Función para cargar los taxis disponibles desde el fichero
+# Función para cargar taxis desde el fichero
 def cargar_taxis_disponibles():
-    try:
-        with open(DB_TAXIS, "r") as file:
-            lineas = file.readlines()
+    if os.path.exists(FICHERO_TAXIS):
+        with open(FICHERO_TAXIS, "r") as file:
+            for line in file:
+                taxi_id, estado = line.strip().split(",")
+                taxis_disponibles[taxi_id] = estado
+    else:
+        with open(FICHERO_TAXIS, "w") as file:
+            file.write("")
 
-        for line in lineas[1:]:  # Omitir la cabecera
-            try:
-                taxi_id, posicion, estado = line.strip().split(",")  # Leer TaxiID, Posicion, Estado
-                posicion = list(map(int, posicion.strip("[]").split(",")))  # Convertir la posición a lista [x, y]
-                taxis_disponibles[int(taxi_id)] = {"posicion": posicion, "estado": estado}
-                print(f"Taxi {taxi_id} cargado: Posicion {posicion}, Estado {estado}")
-            except ValueError:
-                print(f"Error al procesar la línea: {line.strip()}")  # Manejar líneas mal formateadas
-
-    except FileNotFoundError:
-        print(f"El fichero {DB_TAXIS} no se encontró, inicializando vacio.")
-
+# Función para guardar taxis en el fichero
+def guardar_taxis_disponibles():
+    with open(FICHERO_TAXIS, "w") as file:
+        for taxi_id, estado in taxis_disponibles.items():
+            file.write(f"{taxi_id},{estado}\n")
 
 # Función para gestionar solicitudes de clientes desde el fichero
 def procesar_solicitudes_clientes():
@@ -160,25 +126,20 @@ def nuevo_taxi(conn, addr):
     conn.close()
 
 # Función para autenticar el ID del taxi y crear el topic si no existe
-def verificar_topic_creado(topic_name):
-    admin_client = KafkaAdminClient(bootstrap_servers=BOOTSTRAP_SERVER)
-    topics = admin_client.list_topics()
-    return topic_name in topics
-
 def autenticar_taxi(idTaxi):
     if 0 <= idTaxi <= 99:  # Verificar si el ID está en el rango válido
         if idTaxi not in taxis_disponibles:  # Verificar si el ID ya ha sido registrado
             taxis_disponibles[idTaxi] = "Disponible"
             
             # Crear el topic para el taxi si no existe
+            admin_client = KafkaAdminClient(bootstrap_servers=BOOTSTRAP_SERVER)
             topic_name = f"TAXI_{idTaxi}"
-            if not verificar_topic_creado(topic_name):
-                admin_client = KafkaAdminClient(bootstrap_servers=BOOTSTRAP_SERVER)
+            topics = admin_client.list_topics()
+
+            if topic_name not in topics:
                 topic = NewTopic(name=topic_name, num_partitions=1, replication_factor=1)
                 admin_client.create_topics([topic])
                 print(f"Topic {topic_name} creado exitosamente.")
-            else:
-                print(f"Topic {topic_name} ya existe.")
 
             return 1  # ID autenticado correctamente
         else:
@@ -199,7 +160,6 @@ def iniciar_servidor(IP_CENTRAL, PORT_CENTRAL):
         thread.start()
         print(f"[CONEXIONES ACTIVAS] {threading.active_count() - 1}")
 
-
 # Función para listar y suscribirse a todos los topics que empiecen con TAXI_
 def obtener_topics_taxi():
     admin_client = KafkaAdminClient(bootstrap_servers=BOOTSTRAP_SERVER, client_id='admin-central')
@@ -209,50 +169,21 @@ def obtener_topics_taxi():
     topics_taxi = [topic for topic in topics if topic.startswith('TAXI_')]
     return topics_taxi
 
-# Función para consumir los mensajes desde los topics específicos de cada taxi
-def consumir_posiciones_taxis():
-    current_topics = set()
-    consumer = None  # Inicializar el consumidor como None
-
-    while True:
-        new_topics = set(obtener_topics_taxi())  # Revisar los nuevos topics de taxis
-
-        if new_topics != current_topics:  # Si hay nuevos topics, actualizamos el consumidor
-            current_topics = new_topics
-
-            if consumer is not None:
-                consumer.close()  # Cerrar el consumidor anterior si existe
-
-            if current_topics:
-                consumer = KafkaConsumer(
-                    *current_topics,  # Pasar la lista de topics como argumentos
-                    bootstrap_servers=BOOTSTRAP_SERVER,
-                    group_id=GROUP_ID,
-                    auto_offset_reset='earliest'
-                )
-                print(f"Escuchando los topics: {current_topics}")
-
-                for mensaje in consumer:
-                    contenido = mensaje.value.decode('utf-8')
-                    if "Posicion" in contenido and "Estado" in contenido:
-                        taxi_id_str, resto = contenido.split(": Posicion ")
-                        taxi_id = int(taxi_id_str.split()[1])  # Obtener el ID del taxi
-                        posicion_str, estado = resto.split(", Estado ")
-                        posicion = list(map(int, posicion_str.strip('[]').split(',')))  # Convertir la posición a lista
-
-                        print(f"Taxi {taxi_id} - Posición: {posicion}, Estado: {estado}")
-                        guardar_en_fichero(taxi_id, posicion, estado)
-
-        time.sleep(REFRESH_INTERVAL)
-
-
-
-# Función para inicializar el fichero (si es necesario)
-def inicializar_fichero():
-    if not os.path.exists(DB_TAXIS):
-        with open(DB_TAXIS, "w") as file:
-            file.write("TaxiID,Posicion,Estado\n")  # Cabecera del fichero
-            
+# Función para consumir mensajes de todos los taxis
+# Función para consumir mensajes de todos los taxis
+def consumir_taxis():
+    consumer = KafkaConsumer(
+        'estados-taxis',
+        bootstrap_servers=BOOTSTRAP_SERVER,
+        group_id=GROUP_ID,
+        auto_offset_reset='earliest'
+    )
+    
+    global nuevos_estados
+    for mensaje in consumer:
+        taxi_id, estado = mensaje.value.decode('utf-8').split(": ")
+        print(f"Estado recibido de Taxi {taxi_id}: {estado}")
+        nuevos_estados[taxi_id] = estado  # Actualizamos la variable con los nuevos estados
 
 
 # Función para actualizar el dashboard con nuevos estados
@@ -275,9 +206,7 @@ if __name__ == "__main__":
     PORT_CENTRAL = int(sys.argv[2])
 
     print(f"***** [EC_Central] ***** Iniciando con IP: {IP_CENTRAL} y Puerto: {PORT_CENTRAL}")
-    
-    # Inicializar el fichero que actuará como base de datos
-    inicializar_fichero()
+
     # Cargar los taxis disponibles al iniciar la central
     cargar_taxis_disponibles()
 
@@ -286,16 +215,14 @@ if __name__ == "__main__":
     hilo_servidor.daemon = True
     hilo_servidor.start()
 
+    # Iniciar el consumidor de Kafka en un hilo separado
+    hilo_consumidor = threading.Thread(target=consumir_taxis)
+    hilo_consumidor.daemon = True
+    hilo_consumidor.start()
 
     # Iniciar el dashboard en el hilo principal
     dashboard = Dashboard()
-
-
-    # Hilo para consumir posiciones y estados
-    hilo_consumir_posiciones = threading.Thread(target=consumir_posiciones_taxis)
-    hilo_consumir_posiciones.daemon = True
-    hilo_consumir_posiciones.start()
-
-
     dashboard.after(1000, actualizar_dashboard, dashboard)
     dashboard.mainloop()
+
+    

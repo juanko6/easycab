@@ -4,11 +4,21 @@ import threading
 from kafka import KafkaProducer
 import time
 import signal
+import random
 
 BOOTSTRAP_SERVER = '192.168.1.147:9092'
 HEADER = 64
 FORMAT = 'utf-8'
 FIN = "FIN"
+MAPA_DIM = 20  # Dimensión del mapa (20x20)
+
+# Función para enviar la posición y el estado del taxi a Kafka
+def enviar_posicion_estado_kafka(taxi_id, posicion, estado, producer, topic):
+    mensaje = f"Taxi {taxi_id}: Posicion {posicion}, Estado {estado}"
+    producer.send(topic, value=mensaje.encode('utf-8'))
+    print(f"Enviando posición y estado del taxi: {mensaje}")
+    producer.flush()  # Asegura que el mensaje se envía inmediatamente
+
 
 # Función para leer el estado del sensor desde el archivo
 def leer_estado_sensor():
@@ -18,13 +28,6 @@ def leer_estado_sensor():
     except FileNotFoundError:
         return "OK"
 
-# Función para enviar el estado del taxi a Kafka
-def enviar_estado_kafka(taxi_id, estado, producer, topic):
-    #mensaje = f"Taxi {taxi_id}: {estado}"
-    mensaje = f"{taxi_id}: {estado}"
-    producer.send(topic, value=mensaje.encode('utf-8'))
-    #print(f"Enviando estado del taxi: {mensaje} al topic {topic}")
-    producer.flush()  # Asegurar que el mensaje se envíe inmediatamente
 
 # Función para enviar mensajes al servidor central
 def send(client, msg):
@@ -39,27 +42,10 @@ class EC_DE:
     def __init__(self, ID, producer):
         self.ID = ID
         self.estado = "Disponible"  # Estado inicial del taxi
+        self.posicion = [0, 0]  # Inicializar la posición del taxi en (1,1)
         self.producer = producer
         self.topic = f"TAXI_{self.ID}"
         self.running = True  # Variable para controlar el ciclo de ejecución
-
-    # Función que actualiza el estado del taxi en base al sensor
-    def actualizar_estado(self):
-        while self.running:
-            estado_sensor = leer_estado_sensor()
-
-            # Cambiar el estado del taxi según el estado del sensor
-            if estado_sensor == "OK":
-                self.estado = "Disponible"
-                print(f"{estado_sensor}")
-            else:
-                self.estado = "KO"
-                print(f"{estado_sensor}")
-
-            # Enviar el estado actualizado a Kafka
-            enviar_estado_kafka(self.ID, self.estado, self.producer, self.topic)
-            time.sleep(1)  # Leer el estado del sensor cada segundo
-
 
     def conectar_central(self, ADDR_CENTRAL):
         result = 0
@@ -91,6 +77,40 @@ class EC_DE:
 
         return result
 
+    def mover_taxi(self):
+        direcciones = ["norte", "sur", "este", "oeste"]
+
+        while self.running:
+            direccion = random.choice(direcciones)
+            if direccion == "norte":
+                self.posicion[0] = (self.posicion[0] - 1) % MAPA_DIM  # Conectar el norte con el sur
+            elif direccion == "sur":
+                self.posicion[0] = (self.posicion[0] + 1) % MAPA_DIM
+            elif direccion == "este":
+                self.posicion[1] = (self.posicion[1] + 1) % MAPA_DIM  # Conectar el este con el oeste
+            elif direccion == "oeste":
+                self.posicion[1] = (self.posicion[1] - 1) % MAPA_DIM
+
+            # Enviar la nueva posición y el estado a Kafka
+            enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
+
+            time.sleep(5)  # Simular movimiento cada 5 segundos
+
+    # Función que actualiza el estado del taxi basado en el sensor
+    def actualizar_estado(self):
+        while self.running:
+            estado_sensor = leer_estado_sensor()
+
+            # Cambiar el estado del taxi según el estado del sensor
+            if estado_sensor == "OK":
+                self.estado = "Disponible"
+            else:
+                self.estado = "KO"
+
+            # Enviar la nueva posición y el estado a Kafka
+            enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
+
+            time.sleep(1)  # Leer el estado del sensor cada segundo
 
     # Función para detener el taxi de forma ordenada
     def detener(self):
@@ -126,6 +146,10 @@ if len(sys.argv) == 4:
         # Iniciar la actualización del estado del taxi
         hilo_estado = threading.Thread(target=taxi.actualizar_estado)
         hilo_estado.start()
+
+        # Iniciar el movimiento del taxi
+        hilo_movimiento = threading.Thread(target=taxi.mover_taxi)
+        hilo_movimiento.start()
 
         # Mantener el proceso activo
         while True:
