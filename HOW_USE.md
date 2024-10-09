@@ -1,9 +1,15 @@
 Configuracion de KAFKA
 py -m pip install kafka-python
+cambiar en el archivo codec.py de 
+C:\Users\juank\AppData\Local\Programs\Python\Python312\Lib\site-packages\kafka\codec.py
+la ubicación correcta de six
+from six.moves import range
+
+
 para este caso la ip de escucha es la 192.168.1.147
 
 %KAFKA_HOME%\config\zookeeper.properties (se puede configurar el puerto de escucha)
-KAFKA_HOME%\config\server.properties (se debe de configurar IP visible por todos los que vaya a utilizar kafka)
+%KAFKA_HOME%\config\server.properties (se debe de configurar IP visible por todos los que vaya a utilizar kafka)
 
 Nota: se tiene que ejecutar en primer lugar zookeeper y en segundo lugar Kafka broker
 
@@ -38,7 +44,7 @@ py EC_Central.py 5050
 py EC_DE.py 192.168.1.147 5050 88 8080 127.0.0.1
 ip-central puerto-central idtaxi puerto-sensor ip-sensor
 
-python EC_S.py 127.0.0.1 8080
+py EC_S.py 127.0.0.1 8080
 ip-EC_DE puerto-EC_DE
 
 si se apaga el sensor, el EC_DE queda esperando reconexion
