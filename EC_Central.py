@@ -261,17 +261,24 @@ def consumir_solicitudes_clientes():
 def asignar_taxi(taxi_id, destino, cliente_id):
     producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
     topic_taxi = f"TAXI_{taxi_id}"
-    #TODO: 
-        #1 - obtener ubicacion CLIENTE.
-        #2 - Enviar a TAXI a por CLIENTE.
-        #3 - Esperar a que el TAXI confirme recogida del CLIENTE
-        #4 - Enviar a TAXI a DESTINO        
-        #5 - Esperar a que el TAXI confirme llegada al DESTINO
-        #6 - Poner TAXI disponible y cambiar a nueva ubicacion del CLIENTE.
-    producer.send(topic_taxi, value=destino.encode('utf-8'))
-    print(f"Solicitud {destino} enviada al taxi {taxi_id}")
-    producer.flush()
     
+        #1 - obtener ubicacion CLIENTE.
+    ubicacion_Cliente = clientes[cliente_id]
+        #2 - Enviar a TAXI a por CLIENTE.
+    producer.send(topic_taxi, value=ubicacion_Cliente.encode('utf-8'))
+    producer.flush()
+        #3 - Esperar a que el TAXI confirme recogida del CLIENTE
+    #TODO: Obtener respuesta confimación de llegada del TAXI
+        #4 - Enviar a TAXI a DESTINO    
+    producer.send(topic_taxi, value=destino.encode('utf-8'))
+    producer.flush()
+    print(f"Solicitud {destino} enviada al taxi {taxi_id}")    
+        #5 - Esperar a que el TAXI confirme llegada al DESTINO
+    #TODO: Obtener respuesta confimación de llegada del TAXI
+        #6 - Poner TAXI disponible y cambiar a nueva ubicacion del CLIENTE.
+    taxis_disponibles[taxi_id] = "Disponible"
+    clientes[cliente_id] = destino
+
     # Enviar OK al cliente
     enviar_respuesta_cliente(cliente_id, "OK")
 
