@@ -9,12 +9,12 @@ for /f "tokens=1,2 delims==" %%a in (equipo.config) do (
 echo Iniciando Zookeeper
 start 1_start_Zookeeper.bat
 
-timeout /t 5 /nobreak >nul
+timeout /t 7 /nobreak >nul
 
 echo Iniciando Server
 start 2_start_ServerKafka.bat
  
-timeout /t 5 /nobreak >nul
+timeout /t 7 /nobreak >nul
 
 echo Creando topics...
 
