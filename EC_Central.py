@@ -6,6 +6,7 @@ import time
 import sys
 import os
 from dashboard import Dashboard
+import random
 import configuracion
 
 
@@ -19,11 +20,14 @@ FICHERO_TAXIS = "taxis_disponibles.txt"
 FICHERO_MAPA = "mapa_ciudad.txt"
 DB_TAXIS = "taxis_db.txt"  # Fichero que actuará como base de datos
 
+MAPA_FILAS = 20
+MAPA_COLUMNAS = 20
+
 # Lista de taxis disponibles y taxis autenticados
 taxis_disponibles = {}
 taxi_ids = {}  # Taxi_ID : Conexión
 nuevos_estados = {} 
-
+clientes = {}
 
 # Función para escribir las posiciones y estados de los taxis en el fichero
 def guardar_en_fichero(taxi_id, posicion=None, estado=None):
@@ -72,53 +76,6 @@ def cargar_taxis_disponibles():
 
     except FileNotFoundError:
         print(f"El fichero {DB_TAXIS} no se encontró, inicializando vacio.")
-
-
-# Función para gestionar solicitudes de clientes desde el fichero
-def consumir_solicitudes_clientes():        
-        consumer = KafkaConsumer(f'Customer-Central',bootstrap_servers=BOOTSTRAP_SERVER, auto_offset_reset='earliest')
-        producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
-
-        for message in consumer:
-            solicitud = message.value.decode('utf-8')
-            print(f"Nueva solicitud: {solicitud}")    
-            cliente_id, destino = solicitud.split(";")
-        
-            if taxis_disponibles:
-                taxi_id_disponible = list(taxis_disponibles.keys())[0]
-                asignar_taxi(taxi_id_disponible, destino, cliente_id)
-                # Marcar el taxi como ocupado
-                del taxis_disponibles[taxi_id_disponible]
-            else:
-                enviar_respuesta_cliente(cliente_id, "KO")  # Enviar KO si no hay taxis
-                print("No hay taxis disponibles en este momento")                  
-
-# Función para asignar un taxi a una solicitud
-def asignar_taxi(taxi_id, destino, cliente_id):
-    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
-    topic_taxi = f"TAXI_{taxi_id}"
-    #TODO: 
-        #1 - obtener ubicacion CLIENTE.
-        #2 - Enviar a TAXI a por CLIENTE.
-        #3 - Esperar a que el TAXI confirme recogida del CLIENTE
-        #4 - Enviar a TAXI a DESTINO        
-        #5 - Esperar a que el TAXI confirme llegada al DESTINO
-        #6 - Poner TAXI disponible y cambiar a nueva ubicacion del CLIENTE.
-    producer.send(topic_taxi, value=destino.encode('utf-8'))
-    print(f"Solicitud {destino} enviada al taxi {taxi_id}")
-    producer.flush()
-    
-    # Enviar OK al cliente
-    enviar_respuesta_cliente(cliente_id, "OK")
-
-# Función para enviar la respuesta al cliente
-def enviar_respuesta_cliente(cliente_id, respuesta):
-    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)    
-    print(f"Enviando respuesta {respuesta} al cliente '{cliente_id}'")
-    mensaje = f"{cliente_id};{respuesta}"
-    producer.send('Central-Customer', value=mensaje.encode('utf-8'))
-    producer.flush()
-
 
 def nuevo_taxi(conn, addr):
     print(f"[NUEVA CONEXIÓN] {addr} connected.")
@@ -267,6 +224,66 @@ def actualizar_dashboard(dashboard):
         nuevos_estados = {}  # Limpiamos los estados procesados
     dashboard.after(1000, actualizar_dashboard, dashboard)  # Repetir cada segundo
 
+#### CUSTOMER #####
+def iniciar_ubicaciones_clientes():
+        letras = ['a', 'b', 'c', 'd', 'e']
+        ubicaciones_ocupadas = set()
+        for letra in letras:
+            while True:
+                fila = random.randint(0, MAPA_FILAS - 1)
+                columna = random.randint(0, MAPA_COLUMNAS - 1)
+                ubicacion = (fila, columna)
+                if ubicacion not in ubicaciones_ocupadas:
+                    clientes[letra] = ubicacion
+                    ubicaciones_ocupadas.add(ubicacion)
+                    break
+
+# Función para gestionar solicitudes de clientes desde el fichero
+def consumir_solicitudes_clientes():        
+        consumer = KafkaConsumer(f'Customer-Central',bootstrap_servers=BOOTSTRAP_SERVER, auto_offset_reset='earliest')
+        producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
+
+        for message in consumer:
+            solicitud = message.value.decode('utf-8')
+            print(f"Nueva solicitud: {solicitud}")    
+            cliente_id, destino = solicitud.split(";")
+        
+            if taxis_disponibles:
+                taxi_id_disponible = list(taxis_disponibles.keys())[0]
+                asignar_taxi(taxi_id_disponible, destino, cliente_id)
+                # Marcar el taxi como ocupado
+                del taxis_disponibles[taxi_id_disponible]
+            else:
+                enviar_respuesta_cliente(cliente_id, "KO")  # Enviar KO si no hay taxis
+                print("No hay taxis disponibles en este momento")                  
+
+# Función para asignar un taxi a una solicitud
+def asignar_taxi(taxi_id, destino, cliente_id):
+    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
+    topic_taxi = f"TAXI_{taxi_id}"
+    #TODO: 
+        #1 - obtener ubicacion CLIENTE.
+        #2 - Enviar a TAXI a por CLIENTE.
+        #3 - Esperar a que el TAXI confirme recogida del CLIENTE
+        #4 - Enviar a TAXI a DESTINO        
+        #5 - Esperar a que el TAXI confirme llegada al DESTINO
+        #6 - Poner TAXI disponible y cambiar a nueva ubicacion del CLIENTE.
+    producer.send(topic_taxi, value=destino.encode('utf-8'))
+    print(f"Solicitud {destino} enviada al taxi {taxi_id}")
+    producer.flush()
+    
+    # Enviar OK al cliente
+    enviar_respuesta_cliente(cliente_id, "OK")
+
+# Función para enviar la respuesta al cliente
+def enviar_respuesta_cliente(cliente_id, respuesta):
+    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)    
+    print(f"Enviando respuesta {respuesta} al cliente '{cliente_id}'")
+    mensaje = f"{cliente_id};{respuesta}"
+    producer.send('Central-Customer', value=mensaje.encode('utf-8'))
+    producer.flush()
+
+
 ########## MAIN ##########
 
 if __name__ == "__main__":
@@ -283,6 +300,7 @@ if __name__ == "__main__":
     inicializar_fichero()
     # Cargar los taxis disponibles al iniciar la central
     cargar_taxis_disponibles()
+    iniciar_ubicaciones_clientes()
 
     # Iniciar el servidor de autenticación por socket en un hilo separado
     hilo_servidor = threading.Thread(target=iniciar_autenticacion_taxis, args=(IP_CENTRAL, PORT_CENTRAL))
