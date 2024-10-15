@@ -1,6 +1,7 @@
 import tkinter as tk
 import re
 import random
+import json
 
 # Dimensiones del tablero y el mapa (20x20)
 MAPA_FILAS = 20
@@ -14,6 +15,8 @@ COLORES_TAXI = {
     "incidencia": "orange",
     "detenido": "red"
 }
+
+FICHERO_SOLICITUDES = "EC_locations/EC_locations.json"
 
 class Dashboard(tk.Tk):
     def __init__(self):
@@ -81,18 +84,25 @@ class Dashboard(tk.Tk):
         self.actualizar_mapa_periodicamente()
 
     def generar_destinos_aleatorios(self):
-        letras = ['A', 'B', 'C', 'D', 'E', 'F']
-        for letra in letras:
-            while True:
-                fila = random.randint(0, MAPA_FILAS - 1)
-                columna = random.randint(0, MAPA_COLUMNAS - 1)
-                if (fila, columna) not in self.destinos:
-                    self.destinos[(fila, columna)] = letra
-                    self.canvas.itemconfig(self.mapa[fila][columna], fill="blue")
-                    self.canvas.create_text(columna * TAMANO_CELDA + TAMANO_CELDA // 2,
-                                            fila * TAMANO_CELDA + TAMANO_CELDA // 2,
-                                            text=letra, fill="white", font=('Arial', 12, 'bold'))
-                    break
+        # Leer el archivo JSON
+        with open(FICHERO_SOLICITUDES, "r") as file:
+            data = json.load(file)
+
+        # Obtener la lista de locations
+        locations = data["locations"]
+        print(f"LocationS: {locations}")
+        # Iterar por cada location
+        for location in locations:            
+            print(f"1-Location: {location}")
+            letra = location['Id']
+            Pos = location['POS']
+            fila, columna = map(int, Pos.split(","))
+            if (fila, columna) not in self.destinos:
+                self.destinos[(fila, columna)] = letra
+                self.canvas.itemconfig(self.mapa[fila][columna], fill="blue")
+                self.canvas.create_text(columna * TAMANO_CELDA + TAMANO_CELDA // 2,
+                                        fila * TAMANO_CELDA + TAMANO_CELDA // 2,
+                                        text=letra, fill="white", font=('Arial', 12, 'bold'))                
 
 
     def actualizar_taxis(self):
