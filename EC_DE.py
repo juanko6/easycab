@@ -2,7 +2,7 @@ import signal
 import sys
 import socket
 import threading
-from kafka import KafkaProducer
+from kafka import KafkaProducer,KafkaConsumer
 import time
 import random
 import configuracion
@@ -41,11 +41,11 @@ def manejar_sensor(conn_sensor):
             # Recibir estado del sensor
             estado_sensor = conn_sensor.recv(4096).decode(FORMAT)
             if not estado_sensor:
-                print("Cliente desconectado.")
+                print("Sensor desconectado.")
                 break
 
             if estado_sensor == "<EOT>":
-                print("Cliente envió <EOT>. Finalizando comunicación.")
+                print("Sensor envió <EOT>. Finalizando comunicación.")
                 break
 
             print(f"Estado recibido del sensor: {estado_sensor}")
@@ -69,14 +69,14 @@ def manejar_sensor(conn_sensor):
                 conn_sensor.send("<NACK>".encode())
         
         except ConnectionResetError:
-            print("El cliente cerró la conexión inesperadamente.")
+            print("El sensor cerró la conexión inesperadamente.")
             break
 
         except Exception as e:
             print(f"Error al recibir estado del sensor: {e}")
             break
     conn_sensor.close()
-    print("Conexión cerrada con el cliente.")
+    print("Conexión cerrada con el sensor.")
     print(f"Esperando conexión del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
 
 # Función para enviar la posición y el estado del taxi a Kafka
@@ -104,12 +104,21 @@ def send(client, msg):
     client.send(message)
 
 class EC_DE:
-    def __init__(self, ID, producer):
+    def __init__(self, ID, bootstrap):        
+        print(f"***** [EC_DE] ***** Iniciando Taxi ID: {ID} con Kafka en {bootstrap}")
         self.ID = ID
         self.estado = "Disponible"  # Estado inicial del taxi
         self.posicion = [0, 0]  # Inicializar la posición del taxi en (1,1)
-        self.producer = producer
         self.topic = f"TAXI_{self.ID}"
+
+        # Crear Kafka Producer para enviar actulizaciones de estado y posición
+        print("Iniciando productor Kafka")
+        self.producer = KafkaProducer(bootstrap_servers=bootstrap)
+        
+        # Crear Kafka Consumer para recibir servicios
+        print("Iniciando consumidor Kafka")
+        self.consumerServices = KafkaConsumer(self.topic, bootstrap_servers=bootstrap, auto_offset_reset='latest')
+
         self.running = True  # Variable para controlar el ciclo de ejecución
 
     def conectar_central(self, ADDR_CENTRAL):
@@ -141,6 +150,12 @@ class EC_DE:
             print(f"Error al conectar con la central: {e}")
 
         return result
+
+    def aceptar_servicios(self):
+        for message in self.consumerServices:
+            mensaje = message.value.decode('utf-8')
+            print(f"mensajes recibidos {mensaje}")            
+            posCliente, posDestino = mensaje.split(";")
 
     def mover_taxi(self):
         direcciones = ["norte", "sur", "este", "oeste"]
@@ -183,7 +198,7 @@ class EC_DE:
         self.running = False
 
 # Función para aceptar conexiones y manejar las desconexiones de EC_S
-def aceptar_conexiones(server_socket):
+def aceptar_conexiones_S(server_socket):
     while taxi.running:  # Verificar que taxi siga corriendo
         try:
             print("Esperando conexión del sensor...")
@@ -228,16 +243,10 @@ if len(sys.argv) == 6:
     ID = int(sys.argv[3])
 
     SENSOR_IP = sys.argv[4]  # IP del sensor (EC_S)
-    SENSOR_PORT = int(sys.argv[5])  # Puerto del sensor (EC_S)
-
-    print(f"***** [EC_DE] ***** Iniciando Taxi ID: {ID} con Kafka en {BOOTSTRAP_SERVER}")
-    print(f"Esperando conexión del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
-
-    # Crear el Kafka Producer
-    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
+    SENSOR_PORT = int(sys.argv[5])  # Puerto del sensor (EC_S)    
 
     # Crear el taxi
-    taxi = EC_DE(ID, producer)
+    taxi = EC_DE(ID, BOOTSTRAP_SERVER)
 
     # Si la autenticación con la central es exitosa, iniciar el proceso de estados y sensor
     if taxi.conectar_central(ADDR_CENTRAL) > 0:
@@ -252,14 +261,16 @@ if len(sys.argv) == 6:
         hilo_movimiento = threading.Thread(target=taxi.mover_taxi)
         hilo_movimiento.start()
 
+        print(f"Esperando conexión del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
         # Iniciar el servidor para recibir estados de los sensores en un hilo separado
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind((SENSOR_IP, SENSOR_PORT))
         server_socket.listen(1)
 
         # Crear el hilo para aceptar conexiones
-        hilo_servidor = threading.Thread(target=aceptar_conexiones, args=(server_socket,))
-        hilo_servidor.start()
+        hilo_sensor = threading.Thread(target=aceptar_conexiones_S, args=(server_socket,))
+        hilo_sensor.daemon = True
+        hilo_sensor.start()
 
         # Mantener el proceso activo
         while True:
