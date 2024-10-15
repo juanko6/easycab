@@ -10,7 +10,7 @@ import random
 import configuracion
 
 
-BOOTSTRAP_SERVER = '192.168.1.147:9092'
+BOOTSTRAP_SERVER = configuracion.Entorno()
 GROUP_ID = 'central-group'
 REFRESH_INTERVAL = 2  # Intervalo en segundos para verificar nuevos topics
 HEADER = 64
@@ -125,18 +125,38 @@ def verificar_topic_creado(topic_name):
     topics = admin_client.list_topics()
     return topic_name in topics
 
+
+# Esperar activamente a que el topic esté disponible en Kafka
+def esperar_topic_disponible(topic_name, timeout=10):
+    start_time = time.time()
+    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
+    while time.time() - start_time < timeout:
+        if producer.partitions_for(topic_name):
+            print(f"Topic {topic_name} está disponible para producción.")
+            return True
+        time.sleep(1)  # Esperar 1 segundo antes de volver a verificar
+    print(f"Error: Topic {topic_name} no está disponible después de {timeout} segundos.")
+    return False
+
 def autenticar_taxi(idTaxi):
     if 0 <= idTaxi <= 99:  # Verificar si el ID está en el rango válido
         if idTaxi not in taxis_disponibles:  # Verificar si el ID ya ha sido registrado
             taxis_disponibles[idTaxi] = "Disponible"
             
             # Crear el topic para el taxi si no existe
+
             topic_name = f"TAXI_{idTaxi}"
             if not verificar_topic_creado(topic_name):
                 admin_client = KafkaAdminClient(bootstrap_servers=BOOTSTRAP_SERVER)
                 topic = NewTopic(name=topic_name, num_partitions=1, replication_factor=1)
                 admin_client.create_topics([topic])
                 print(f"Topic {topic_name} creado exitosamente.")
+
+                # Esperar a que el topic esté disponible para la producción
+                if esperar_topic_disponible(topic_name):
+                    print(f"El topic {topic_name} está listo para ser usado.")
+                else:
+                    print(f"Error: El topic {topic_name} no está disponible después de crear.")
             else:
                 print(f"Topic {topic_name} ya existe.")
 

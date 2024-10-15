@@ -1,9 +1,9 @@
-import signal
-import sys
 import socket
+import sys
 import threading
 from kafka import KafkaProducer
 import time
+import signal
 import random
 import configuracion
 
@@ -59,7 +59,7 @@ def manejar_sensor(conn_sensor):
 
             # Verificar LRC
             if verificar_lrc(estado_sensor[:estado_sensor.find("<ETX>")+len("<ETX>")], lrc_recibido):
-                print(f"Estado válido: {data}")
+                print(f"estado válido: {data}")
                 conn_sensor.send("<ACK>".encode())
                 # Guardar el estado en un fichero (sobrescribir)
                 with open("estado_sensor.txt", "w") as file:
@@ -79,12 +79,14 @@ def manejar_sensor(conn_sensor):
     print("Conexión cerrada con el cliente.")
     print(f"Esperando conexión del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
 
+
 # Función para enviar la posición y el estado del taxi a Kafka
 def enviar_posicion_estado_kafka(taxi_id, posicion, estado, producer, topic):
     mensaje = f"Taxi {taxi_id}: Posicion {posicion}, Estado {estado}"
     producer.send(topic, value=mensaje.encode('utf-8'))
-    print(f"Enviando posición y estado del taxi: {mensaje}")
+    #print(f"Enviando posición y estado del taxi: {mensaje}")
     producer.flush()  # Asegura que el mensaje se envía inmediatamente
+
 
 # Función para leer el estado del sensor desde el archivo
 def leer_estado_sensor():
@@ -93,6 +95,7 @@ def leer_estado_sensor():
             return file.read().strip()
     except FileNotFoundError:
         return "OK"
+
 
 # Función para enviar mensajes al servidor central
 def send(client, msg):
@@ -176,16 +179,18 @@ class EC_DE:
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
 
             time.sleep(1)  # Leer el estado del sensor cada segundo
-
+        
     # Función para detener el taxi de forma ordenada
     def detener(self):
         print("\n[EC_DE] Apagando el taxi...")
         self.running = False
 
 # Función para aceptar conexiones y manejar las desconexiones de EC_S
+# Función para aceptar conexiones y manejar las desconexiones de EC_S
 def aceptar_conexiones(server_socket):
     while taxi.running:  # Verificar que taxi siga corriendo
         try:
+            server_socket.settimeout(2.0)  # Establecer un timeout de 2 segundos en el accept()
             print("Esperando conexión del sensor...")
             conn_sensor, addr = server_socket.accept()
             print(f"Conexión establecida con el sensor en {addr}")
@@ -212,6 +217,7 @@ def aceptar_conexiones(server_socket):
         except Exception as e:
             print(f"Error al establecer la conexión con el sensor: {e}")
 
+
 ########## MAIN ##########
 
 def signal_handler(sig, frame):
@@ -222,6 +228,7 @@ def signal_handler(sig, frame):
     sys.exit(0)  # Terminar el programa
 
 if len(sys.argv) == 6:
+    # Leer los argumentos
     SERVER_CENTRAL = sys.argv[1]
     PORT_CENTRAL = int(sys.argv[2])
     ADDR_CENTRAL = (SERVER_CENTRAL, PORT_CENTRAL)
@@ -244,11 +251,11 @@ if len(sys.argv) == 6:
         # Iniciar el manejo de señales para cerrar el taxi con Ctrl+C
         signal.signal(signal.SIGINT, signal_handler)
 
-        # Iniciar la actualización del estado del taxi
+        # Iniciar la actualización del estado del taxi en un hilo separado
         hilo_estado = threading.Thread(target=taxi.actualizar_estado)
         hilo_estado.start()
 
-        # Iniciar el movimiento del taxi
+        # Iniciar el movimiento del taxi en un hilo separado
         hilo_movimiento = threading.Thread(target=taxi.mover_taxi)
         hilo_movimiento.start()
 
@@ -261,9 +268,9 @@ if len(sys.argv) == 6:
         hilo_servidor = threading.Thread(target=aceptar_conexiones, args=(server_socket,))
         hilo_servidor.start()
 
-        # Mantener el proceso activo
+        # Mantener el proceso activo sin bloqueos
         while True:
             time.sleep(1)
 
 else:
-    print("Oops!. Parece que algo falló. Necesito estos argumentos: <ServerIP> <Puerto> <ID> <PuertoSensor> <IPSensor>")
+    print("Oops!. Parece que algo falló. Necesito estos argumentos: <ServerIP> <Puerto> <ID> <IPSensor> <PuertoSensor>")

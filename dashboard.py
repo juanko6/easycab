@@ -167,7 +167,7 @@ class Dashboard(tk.Tk):
 
     def actualizar_mapa_periodicamente(self):
         self.actualizar_mapa()
-        print("Mapa actualizado")
+        #print("Mapa actualizado")
         self.after(3000, self.actualizar_mapa_periodicamente)  # Actualizar cada 3 segundos
 
             
