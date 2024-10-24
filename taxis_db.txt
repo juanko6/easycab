@@ -1,2 +1,0 @@
-TaxiID,Posicion,Estado
-6,[2,9],Disponible

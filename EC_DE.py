@@ -160,21 +160,25 @@ class EC_DE:
     def mover_taxi(self):
         direcciones = ["norte", "sur", "este", "oeste"]
 
-        while self.running:
-            direccion = random.choice(direcciones)
-            if direccion == "norte":
-                self.posicion[0] = (self.posicion[0] - 1) % MAPA_DIM  # Conectar el norte con el sur
-            elif direccion == "sur":
-                self.posicion[0] = (self.posicion[0] + 1) % MAPA_DIM
-            elif direccion == "este":
-                self.posicion[1] = (self.posicion[1] + 1) % MAPA_DIM  # Conectar el este con el oeste
-            elif direccion == "oeste":
-                self.posicion[1] = (self.posicion[1] - 1) % MAPA_DIM
+        while self.running:  # Continuar moviéndose mientras el taxi esté en funcionamiento
+            if self.estado == "KO":
+                time.sleep(1)  # Si el estado es KO, detenerse sin hacer nada
+            else:
+                # Si el estado es OK, el taxi se moverá
+                direccion = random.choice(direcciones)
+                if direccion == "norte":
+                    self.posicion[0] = (self.posicion[0] - 1) % MAPA_DIM  # Conectar el norte con el sur
+                elif direccion == "sur":
+                    self.posicion[0] = (self.posicion[0] + 1) % MAPA_DIM
+                elif direccion == "este":
+                    self.posicion[1] = (self.posicion[1] + 1) % MAPA_DIM  # Conectar el este con el oeste
+                elif direccion == "oeste":
+                    self.posicion[1] = (self.posicion[1] - 1) % MAPA_DIM
 
-            # Enviar la nueva posición y el estado a Kafka
-            enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
+                # Enviar la nueva posición y el estado a Kafka
+                enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
 
-            time.sleep(5)  # Simular movimiento cada 5 segundos
+                time.sleep(5)  # Simular movimiento cada 5 segundos
 
     # Función que actualiza el estado del taxi basado en el sensor
     def actualizar_estado(self):
@@ -182,15 +186,17 @@ class EC_DE:
             estado_sensor = leer_estado_sensor()
 
             # Cambiar el estado del taxi según el estado del sensor
-            if estado_sensor == "OK":
-                self.estado = "Disponible"
-            else:
-                self.estado = "KO"
+            if estado_sensor == "OK" and self.estado == "KO":
+                print(f"Taxi {self.ID} reanudando el movimiento después de la incidencia.")
+                self.estado = "Disponible"  # Cambiar el estado a disponible para que el taxi vuelva a moverse
+            elif estado_sensor != "OK":
+                self.estado = "KO"  # Cambiar el estado a KO si hay una incidencia
 
             # Enviar la nueva posición y el estado a Kafka
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
 
             time.sleep(1)  # Leer el estado del sensor cada segundo
+        
 
     # Función para detener el taxi de forma ordenada
     def detener(self):

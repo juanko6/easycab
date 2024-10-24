@@ -1,3 +1,8 @@
+descargar apache-kafka
+variables de entorno
+cambiar ip del server
+
+
 Configuracion de KAFKA
 py -m pip install kafka-python
 cambiar en el archivo codec.py de 
