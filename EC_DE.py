@@ -191,7 +191,8 @@ def manejar_sensor(conn_sensor):
 
                 
                 # Guardar el estado en un fichero
-                with open("estado_sensor.txt", "w") as file:
+                fichero_estado = f"estado_sensor_taxi_{taxi.ID}.txt"
+                with open(fichero_estado, "w") as file:
                     file.write(f"{data}\n")
             else:
                 print("Error: LRC no coincide. El mensaje está corrupto.")
@@ -230,13 +231,18 @@ def enviar_posicion_estado_kafka(taxi_id, posicion, estado, producer, topic):
     print(f"Enviando posición y estado del taxi: {mensaje}")
     producer.flush()  # Asegura que el mensaje se envía inmediatamente
 
-# Función para leer el estado del sensor desde el archivo
-def leer_estado_sensor():
+# Función para leer el estado del sensor desde el archivo identificado por el ID del taxi
+def leer_estado_sensor(taxi_id):
+    fichero_estado = f"estado_sensor_taxi_{taxi_id}.txt"
     try:
-        with open("estado_sensor.txt", "r") as file:
-            return file.read().strip()
+        with open(fichero_estado, "r") as file:
+            return file.read().strip()  # Leer y devolver el estado sin espacios en blanco
     except FileNotFoundError:
-        return "OK"
+        return "OK"  # Si no existe el archivo, retornar "OK" por defecto
+    except Exception as e:
+        print(f"Error al leer el estado del sensor para Taxi {taxi_id}: {e}")
+        return "OK"  # Manejar otros errores devolviendo "OK" por defecto
+
 
 # Función para enviar mensajes al servidor central
 def send(client, msg):

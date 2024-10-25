@@ -127,46 +127,51 @@ class Dashboard(tk.Tk):
                     self.canvas.itemconfig(self.mapa[fila_anterior][columna_anterior], fill="white")
                     self.canvas.delete(self.textos_celdas.get((fila_anterior, columna_anterior)))
 
-
-            # Normalizar el estado para buscar el color correctamente
-            estado_normalizado = estado.lower().strip()
-
-            # Imprimir el estado normalizado y el color asignado para diagnóstico
-            print(f"Estado normalizado: {estado_normalizado}, color asignado: {COLORES_TAXI.get(estado_normalizado, 'white')}")
-
             # Asignar el color en función del estado
+            estado_normalizado = estado.lower().strip()
             color = COLORES_TAXI.get(estado_normalizado, "white")
             self.canvas.itemconfig(self.mapa[fila][columna], fill=color)
 
+            # Borrar el texto anterior en la celda del mapa
             if (fila, columna) in self.textos_celdas:
-                self.canvas.delete(self.textos_celdas[(fila, columna)])  # Borrar el texto anterior en esa celda
+                self.canvas.delete(self.textos_celdas[(fila, columna)])
+
+            # Mostrar solo el ID del taxi en el mapa
             self.textos_celdas[(fila, columna)] = self.canvas.create_text(
                 columna * TAMANO_CELDA + TAMANO_CELDA // 2,
                 fila * TAMANO_CELDA + TAMANO_CELDA // 2,
                 text=str(taxi_id), fill="black", font=('Arial', 12, 'bold')
             )
 
-            # Actualizar el estado en la tabla de taxis
+            # Actualizar el estado en la tabla de taxis (fuera del mapa)
             if f"estado_{taxi_id}" in self.textos_celdas:
-                # Borrar el texto anterior del estado si existe
                 self.canvas.delete(self.textos_celdas[f"estado_{taxi_id}"])
+                del self.textos_celdas[f"estado_{taxi_id}"]  # Eliminar del diccionario para evitar referencias
 
-            # Crear el nuevo texto para el estado del taxi
+            # Crear el nuevo texto para el estado del taxi en la tabla (asegurar que no se solapen)
+            posicion_y_estado = 120 + taxi_id * 20  # Ajustar la posición para que no se monten
             self.textos_celdas[f"estado_{taxi_id}"] = self.canvas.create_text(
-                columna * TAMANO_CELDA + TAMANO_CELDA // 2,  # Ajustar posición según el diseño de la tabla
-                fila * TAMANO_CELDA + TAMANO_CELDA // 2,
+                300, posicion_y_estado,  # Ajusta las coordenadas para la tabla
                 text=estado, fill="black", font=('Arial', 12, 'bold')
             )
 
             # Actualizar la última posición del taxi
             self.ultima_posicion_taxis[taxi_id] = (fila, columna)
 
+
+
     def actualizar_tabla_taxis(self):
+        # Limpiar la tabla de taxis antes de actualizar
+        for widget in self.tabla_frame.grid_slaves():
+            if int(widget.grid_info()["row"]) > 1:  # Mantener los títulos (fila 1)
+                widget.grid_forget()  # Eliminar el widget de la tabla
+        
         # Mostrar los taxis en la tabla
         for idx, (taxi_id, info) in enumerate(self.taxis.items(), start=2):
             tk.Label(self.tabla_frame, text=str(taxi_id)).grid(row=idx, column=0)
-            tk.Label(self.tabla_frame, text="sin destino").grid(row=idx, column=1) 
+            tk.Label(self.tabla_frame, text="sin destino").grid(row=idx, column=1)
             tk.Label(self.tabla_frame, text=info["estado"]).grid(row=idx, column=2)
+
 
     def leer_fichero_taxis(self):
         try:
