@@ -13,103 +13,14 @@ FORMAT = 'utf-8'
 FIN = "FIN"
 MAPA_DIM = 20  # Dimensión del mapa (20x20)
 
-def calcular_lrc(estado):
-    lrc = 0
-    for byte in estado.encode():
-        lrc ^= byte
-    return lrc
-
-# Función para desempaquetar el estado
-def desempaquetar_estado(estado):
-    stx_index = estado.find("<STX>")
-    etx_index = estado.find("<ETX>")
-    if stx_index != -1 and etx_index != -1:
-        data = estado[stx_index + len("<STX>"):etx_index]
-        lrc = int(estado[etx_index + len("<ETX>"):])
-        return data, lrc
-    else:
-        return None, None
-
-def verificar_lrc(estado, lrc_recibido):
-    lrc_calculado = calcular_lrc(estado)
-    return lrc_calculado == lrc_recibido
-
-# Función para manejar la recepción de mensajes del sensor
-def manejar_sensor(conn_sensor):
-    while True:
-        try:
-            # Recibir estado del sensor
-            estado_sensor = conn_sensor.recv(4096).decode(FORMAT)
-            if not estado_sensor:
-                print("Sensor desconectado.")
-                break
-
-            if estado_sensor == "<EOT>":
-                print("Sensor envió <EOT>. Finalizando comunicación.")
-                break
-
-            print(f"Estado recibido del sensor: {estado_sensor}")
-
-            # Desempaquetar el mensaje
-            data, lrc_recibido = desempaquetar_estado(estado_sensor)
-            if data is None:
-                print("Error en el formato del mensaje")
-                conn_sensor.send("<NACK>".encode())
-                continue
-
-            # Verificar LRC
-            if verificar_lrc(estado_sensor[:estado_sensor.find("<ETX>")+len("<ETX>")], lrc_recibido):
-                print(f"Estado válido: {data}")
-                conn_sensor.send("<ACK>".encode())
-                # Guardar el estado en un fichero (sobrescribir)
-                with open("estado_sensor.txt", "w") as file:
-                    file.write(f"{data}\n")
-            else:
-                print("Error: LRC no coincide. El mensaje está corrupto.")
-                conn_sensor.send("<NACK>".encode())
-        
-        except ConnectionResetError:
-            print("El sensor cerró la conexión inesperadamente.")
-            break
-
-        except Exception as e:
-            print(f"Error al recibir estado del sensor: {e}")
-            break
-    conn_sensor.close()
-    print("Conexión cerrada con el sensor.")
-    print(f"Esperando conexión del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
-
-# Función para enviar la posición y el estado del taxi a Kafka
-def enviar_posicion_estado_kafka(taxi_id, posicion, estado, producer, topic):
-    mensaje = f"Taxi {taxi_id}: Posicion {posicion}, Estado {estado}"
-    producer.send(topic, value=mensaje.encode('utf-8'))
-    print(f"Enviando posición y estado del taxi: {mensaje}")
-    producer.flush()  # Asegura que el mensaje se envía inmediatamente
-
-# Función para leer el estado del sensor desde el archivo
-def leer_estado_sensor():
-    try:
-        with open("estado_sensor.txt", "r") as file:
-            return file.read().strip()
-    except FileNotFoundError:
-        return "OK"
-
-# Función para enviar mensajes al servidor central
-def send(client, msg):
-    message = msg.encode(FORMAT)
-    msg_length = len(message)
-    send_length = str(msg_length).encode(FORMAT)
-    send_length += b' ' * (HEADER - len(send_length))
-    client.send(send_length)
-    client.send(message)
-
 class EC_DE:
     def __init__(self, ID, bootstrap):        
         print(f"***** [EC_DE] ***** Iniciando Taxi ID: {ID} con Kafka en {bootstrap}")
         self.ID = ID
-        self.estado = "Disponible"  # Estado inicial del taxi
+        self.estado = "esperandoconexion"  # Estado inicial del taxi
         self.posicion = [0, 0]  # Inicializar la posición del taxi en (1,1)
         self.topic = f"TAXI_{self.ID}"
+        self.sensor_conectado = False  # Estado de conexión del sensor
 
         # Crear Kafka Producer para enviar actulizaciones de estado y posición
         print("Iniciando productor Kafka")
@@ -120,6 +31,7 @@ class EC_DE:
         self.consumerServices = KafkaConsumer(self.topic, bootstrap_servers=bootstrap, auto_offset_reset='latest')
 
         self.running = True  # Variable para controlar el ciclo de ejecución
+        
 
     def conectar_central(self, ADDR_CENTRAL):
         result = 0
@@ -157,44 +69,56 @@ class EC_DE:
             print(f"mensajes recibidos {mensaje}")            
             posCliente, posDestino = mensaje.split(";")
 
+
     def mover_taxi(self):
         direcciones = ["norte", "sur", "este", "oeste"]
 
-        while self.running:  # Continuar moviéndose mientras el taxi esté en funcionamiento
-            if self.estado == "KO":
-                time.sleep(1)  # Si el estado es KO, detenerse sin hacer nada
-            else:
-                # Si el estado es OK, el taxi se moverá
+        while self.running:  # Mantener el bucle en ejecución constante
+            # Verificar el estado actual y mover el taxi solo si está "Disponible"
+            if self.estado == "Disponible":
+                # Si el estado es "Disponible", el taxi se moverá
                 direccion = random.choice(direcciones)
                 if direccion == "norte":
-                    self.posicion[0] = (self.posicion[0] - 1) % MAPA_DIM  # Conectar el norte con el sur
+                    self.posicion[0] = (self.posicion[0] - 1) % MAPA_DIM
                 elif direccion == "sur":
                     self.posicion[0] = (self.posicion[0] + 1) % MAPA_DIM
                 elif direccion == "este":
-                    self.posicion[1] = (self.posicion[1] + 1) % MAPA_DIM  # Conectar el este con el oeste
+                    self.posicion[1] = (self.posicion[1] + 1) % MAPA_DIM
                 elif direccion == "oeste":
                     self.posicion[1] = (self.posicion[1] - 1) % MAPA_DIM
 
-                # Enviar la nueva posición y el estado a Kafka
+                print(f"Moviendo taxi {self.ID} en dirección {direccion}, nueva posición: {self.posicion}")
+                # Enviar posición y estado a Kafka cuando está en movimiento
                 enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
 
-                time.sleep(5)  # Simular movimiento cada 5 segundos
+            elif self.estado == "KO":
+                # En caso de "KO", el taxi se detiene pero sigue revisando el estado
+                print(f"Taxi {self.ID} detenido. Estado actual: {self.estado}")
+                # Asegurar que se envíe el estado KO a Kafka incluso si el taxi está detenido
+                enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
+
+            # Tiempo de espera: 5 segundos en movimiento, 1 segundo si está en KO
+            time.sleep(5 if self.estado == "Disponible" else 1)
+
+
 
     # Función que actualiza el estado del taxi basado en el sensor
     def actualizar_estado(self):
         while self.running:
-            estado_sensor = leer_estado_sensor()
-
-            # Cambiar el estado del taxi según el estado del sensor
-            if estado_sensor == "OK" and self.estado == "KO":
-                print(f"Taxi {self.ID} reanudando el movimiento después de la incidencia.")
-                self.estado = "Disponible"  # Cambiar el estado a disponible para que el taxi vuelva a moverse
-            elif estado_sensor != "OK":
-                self.estado = "KO"  # Cambiar el estado a KO si hay una incidencia
-
+            if not self.sensor_conectado:
+                self.estado = "esperandoconexion"
+                print(f"Taxi {self.ID} en espera de conexión con el sensor.")
+            else:
+                estado_sensor = leer_estado_sensor()
+                if estado_sensor == "OK":
+                    self.estado = "Disponible"
+                    self.running = True
+                else:
+                    self.estado = "KO"
+                    self.running = False
+                    
             # Enviar la nueva posición y el estado a Kafka
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
-
             time.sleep(1)  # Leer el estado del sensor cada segundo
         
 
@@ -203,12 +127,143 @@ class EC_DE:
         print("\n[EC_DE] Apagando el taxi...")
         self.running = False
 
+
+
+
+
+def calcular_lrc(estado):
+    lrc = 0
+    for byte in estado.encode():
+        lrc ^= byte
+    return lrc
+
+# Función para desempaquetar el estado
+def desempaquetar_estado(estado):
+    stx_index = estado.find("<STX>")
+    etx_index = estado.find("<ETX>")
+    if stx_index != -1 and etx_index != -1:
+        data = estado[stx_index + len("<STX>"):etx_index]
+        lrc = int(estado[etx_index + len("<ETX>"):])
+        return data, lrc
+    else:
+        return None, None
+
+def verificar_lrc(estado, lrc_recibido):
+    lrc_calculado = calcular_lrc(estado)
+    return lrc_calculado == lrc_recibido
+
+# Función para manejar la recepción de mensajes del sensor
+def manejar_sensor(conn_sensor):
+    while True:
+        try:
+            # Recibir estado del sensor
+            estado_sensor = conn_sensor.recv(4096).decode(FORMAT)
+            
+            if not estado_sensor:
+                print("Sensor desconectado.")
+                taxi.estado = "esperandoconexion"
+                taxi.sensor_conectado = False
+                enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+                break
+
+            if estado_sensor == "<EOT>":
+                print("Sensor envió <EOT>. Finalizando comunicación.")
+                taxi.estado = "KO"
+                taxi.sensor_conectado = False
+                enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+                break
+
+            print(f"Estado recibido del sensor: {estado_sensor}")
+            taxi.sensor_conectado = True
+
+            data, lrc_recibido = desempaquetar_estado(estado_sensor)
+            if data is None:
+                print("Error en el formato del mensaje")
+                conn_sensor.send("<NACK>".encode())
+                continue
+
+            if verificar_lrc(estado_sensor[:estado_sensor.find("<ETX>")+len("<ETX>")], lrc_recibido):
+                print(f"Estado válido: {data}")
+                conn_sensor.send("<ACK>".encode())
+
+                # Cambiar el estado del taxi en función del mensaje recibido
+                if data == "OK":
+                    taxi.estado = "Disponible"
+                else:
+                    taxi.estado = "KO"
+                    print(f"Incidencia detectada: {data}")
+
+                # Confirmar y enviar el estado actualizado a EC_Central
+                print(f"Taxi {taxi.ID}: Posicion {taxi.posicion}, Estado {taxi.estado}")
+                enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+
+                
+                # Guardar el estado en un fichero
+                with open("estado_sensor.txt", "w") as file:
+                    file.write(f"{data}\n")
+            else:
+                print("Error: LRC no coincide. El mensaje está corrupto.")
+                conn_sensor.send("<NACK>".encode())
+
+        except socket.timeout:
+            print("Timeout: No se recibió un mensaje del sensor.")
+            taxi.estado = "esperandoconexion"
+            taxi.sensor_conectado = False
+            enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+            break
+
+        except ConnectionResetError:
+            print("Conexión perdida con el sensor.")
+            taxi.estado = "esperandoconexion"
+            taxi.sensor_conectado = False
+            enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+            break
+
+        except Exception as e:
+            print(f"Error al recibir estado del sensor: {e}")
+            taxi.estado = "esperandoconexion"
+            taxi.sensor_conectado = False
+            enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+            break
+        
+    conn_sensor.close()
+    taxi.sensor_conectado = False
+    print("Conexión cerrada con el sensor.")
+    print(f"Esperando conexion del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
+
+# Función para enviar la posición y el estado del taxi a Kafka
+def enviar_posicion_estado_kafka(taxi_id, posicion, estado, producer, topic):
+    mensaje = f"Taxi {taxi_id}: Posicion {posicion}, Estado {estado}"
+    producer.send(topic, value=mensaje.encode('utf-8'))
+    print(f"Enviando posición y estado del taxi: {mensaje}")
+    producer.flush()  # Asegura que el mensaje se envía inmediatamente
+
+# Función para leer el estado del sensor desde el archivo
+def leer_estado_sensor():
+    try:
+        with open("estado_sensor.txt", "r") as file:
+            return file.read().strip()
+    except FileNotFoundError:
+        return "OK"
+
+# Función para enviar mensajes al servidor central
+def send(client, msg):
+    message = msg.encode(FORMAT)
+    msg_length = len(message)
+    send_length = str(msg_length).encode(FORMAT)
+    send_length += b' ' * (HEADER - len(send_length))
+    client.send(send_length)
+    client.send(message)
+
+
 # Función para aceptar conexiones y manejar las desconexiones de EC_S
 def aceptar_conexiones_S(server_socket):
     while taxi.running:  # Verificar que taxi siga corriendo
         try:
-            print("Esperando conexión del sensor...")
+            print("Esperando conexion del sensor...")
             conn_sensor, addr = server_socket.accept()
+            taxi.sensor_conectado = True  # Marcar sensor como conectado
+            taxi.estado = "Disponible"  # Cambiar estado a disponible si el sensor está conectado y sin incidencias
             print(f"Conexión establecida con el sensor en {addr}")
 
             # Confirmar conexión con <ACK> después de recibir <ENQ>
@@ -232,6 +287,9 @@ def aceptar_conexiones_S(server_socket):
 
         except Exception as e:
             print(f"Error al establecer la conexión con el sensor: {e}")
+            taxi.sensor_conectado = False  # Marcar sensor como desconectado
+            taxi.estado = "esperandoconexion"  # Volver al estado de espera
+            taxi.running = False  # Detener el taxi en caso de desconexión
 
 ########## MAIN ##########
 
@@ -267,7 +325,7 @@ if len(sys.argv) == 6:
         hilo_movimiento = threading.Thread(target=taxi.mover_taxi)
         hilo_movimiento.start()
 
-        print(f"Esperando conexión del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
+        print(f"Esperando conexion del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
         # Iniciar el servidor para recibir estados de los sensores en un hilo separado
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_socket.bind((SENSOR_IP, SENSOR_PORT))

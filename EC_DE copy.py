@@ -77,7 +77,7 @@ def manejar_sensor(conn_sensor):
             break
     conn_sensor.close()
     print("Conexión cerrada con el cliente.")
-    print(f"Esperando conexión del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
+    print(f"Esperando conexion del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
 
 
 # Función para enviar la posición y el estado del taxi a Kafka
@@ -191,7 +191,7 @@ def aceptar_conexiones(server_socket):
     while taxi.running:  # Verificar que taxi siga corriendo
         try:
             server_socket.settimeout(2.0)  # Establecer un timeout de 2 segundos en el accept()
-            print("Esperando conexión del sensor...")
+            print("Esperando conexion del sensor...")
             conn_sensor, addr = server_socket.accept()
             print(f"Conexión establecida con el sensor en {addr}")
 
@@ -238,7 +238,7 @@ if len(sys.argv) == 6:
     SENSOR_PORT = int(sys.argv[5])  # Puerto del sensor (EC_S)
 
     print(f"***** [EC_DE] ***** Iniciando Taxi ID: {ID} con Kafka en {BOOTSTRAP_SERVER}")
-    print(f"Esperando conexión del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
+    print(f"Esperando conexion del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
 
     # Crear el Kafka Producer
     producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)

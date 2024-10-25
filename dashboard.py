@@ -11,9 +11,10 @@ TAMANO_CELDA = 30  # Tamaño de cada celda del mapa en píxeles
 # Colores para diferentes estados de los taxis
 COLORES_TAXI = {
     "disponible": "green",
-    "en camino": "blue",
+    "encamino": "blue",
     "incidencia": "orange",
-    "detenido": "red"
+    "ko": "red",
+    "esperandoconexion": "grey"
 }
 
 FICHERO_SOLICITUDES = "EC_locations/EC_locations.json"
@@ -126,14 +127,35 @@ class Dashboard(tk.Tk):
                     self.canvas.itemconfig(self.mapa[fila_anterior][columna_anterior], fill="white")
                     self.canvas.delete(self.textos_celdas.get((fila_anterior, columna_anterior)))
 
-            # Pintar la nueva posición del taxi con su ID y color
-            self.canvas.itemconfig(self.mapa[fila][columna], fill=COLORES_TAXI.get(estado.lower(), "white"))
+
+            # Normalizar el estado para buscar el color correctamente
+            estado_normalizado = estado.lower().strip()
+
+            # Imprimir el estado normalizado y el color asignado para diagnóstico
+            print(f"Estado normalizado: {estado_normalizado}, color asignado: {COLORES_TAXI.get(estado_normalizado, 'white')}")
+
+            # Asignar el color en función del estado
+            color = COLORES_TAXI.get(estado_normalizado, "white")
+            self.canvas.itemconfig(self.mapa[fila][columna], fill=color)
+
             if (fila, columna) in self.textos_celdas:
                 self.canvas.delete(self.textos_celdas[(fila, columna)])  # Borrar el texto anterior en esa celda
             self.textos_celdas[(fila, columna)] = self.canvas.create_text(
                 columna * TAMANO_CELDA + TAMANO_CELDA // 2,
                 fila * TAMANO_CELDA + TAMANO_CELDA // 2,
                 text=str(taxi_id), fill="black", font=('Arial', 12, 'bold')
+            )
+
+            # Actualizar el estado en la tabla de taxis
+            if f"estado_{taxi_id}" in self.textos_celdas:
+                # Borrar el texto anterior del estado si existe
+                self.canvas.delete(self.textos_celdas[f"estado_{taxi_id}"])
+
+            # Crear el nuevo texto para el estado del taxi
+            self.textos_celdas[f"estado_{taxi_id}"] = self.canvas.create_text(
+                columna * TAMANO_CELDA + TAMANO_CELDA // 2,  # Ajustar posición según el diseño de la tabla
+                fila * TAMANO_CELDA + TAMANO_CELDA // 2,
+                text=estado, fill="black", font=('Arial', 12, 'bold')
             )
 
             # Actualizar la última posición del taxi
