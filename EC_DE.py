@@ -76,7 +76,6 @@ class EC_DE:
         while self.running:  # Mantener el bucle en ejecución constante
             # Verificar el estado actual y mover el taxi solo si está "Disponible"
             if self.estado == "Disponible":
-                # Si el estado es "Disponible", el taxi se moverá
                 direccion = random.choice(direcciones)
                 if direccion == "norte":
                     self.posicion[0] = (self.posicion[0] - 1) % MAPA_DIM
@@ -88,16 +87,12 @@ class EC_DE:
                     self.posicion[1] = (self.posicion[1] - 1) % MAPA_DIM
 
                 print(f"Moviendo taxi {self.ID} en dirección {direccion}, nueva posición: {self.posicion}")
-                # Enviar posición y estado a Kafka cuando está en movimiento
                 enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
 
             elif self.estado == "KO":
-                # En caso de "KO", el taxi se detiene pero sigue revisando el estado
                 print(f"Taxi {self.ID} detenido. Estado actual: {self.estado}")
-                # Asegurar que se envíe el estado KO a Kafka incluso si el taxi está detenido
                 enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
 
-            # Tiempo de espera: 5 segundos en movimiento, 1 segundo si está en KO
             time.sleep(5 if self.estado == "Disponible" else 1)
 
 
@@ -112,15 +107,12 @@ class EC_DE:
                 estado_sensor = leer_estado_sensor()
                 if estado_sensor == "OK":
                     self.estado = "Disponible"
-                    self.running = True
                 else:
                     self.estado = "KO"
-                    self.running = False
                     
-            # Enviar la nueva posición y el estado a Kafka
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
-            time.sleep(1)  # Leer el estado del sensor cada segundo
-        
+            time.sleep(1)
+
 
     # Función para detener el taxi de forma ordenada
     def detener(self):
@@ -168,7 +160,7 @@ def manejar_sensor(conn_sensor):
 
             if estado_sensor == "<EOT>":
                 print("Sensor envió <EOT>. Finalizando comunicación.")
-                taxi.estado = "KO"
+                taxi.estado = "esperandoconexion"
                 taxi.sensor_conectado = False
                 enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
                 break
@@ -264,6 +256,7 @@ def aceptar_conexiones_S(server_socket):
             conn_sensor, addr = server_socket.accept()
             taxi.sensor_conectado = True  # Marcar sensor como conectado
             taxi.estado = "Disponible"  # Cambiar estado a disponible si el sensor está conectado y sin incidencias
+            taxi.running = True
             print(f"Conexión establecida con el sensor en {addr}")
 
             # Confirmar conexión con <ACK> después de recibir <ENQ>
