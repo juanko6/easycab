@@ -1,7 +1,8 @@
 @echo off
 
+set KAFKA_HOME = "C:\kafka"
 setlocal enabledelayedexpansion
-REM Leer el archivo de configuración línea por línea
+REM Leer el archivo de configuraciï¿½n lï¿½nea por lï¿½nea
 for /f "tokens=1,2 delims==" %%a in (equipo.config) do (
     set %%a=%%b
 )
@@ -14,7 +15,7 @@ echo La variable de entorno KAFKA_HOME ha sido creada.
 
 rem set NEW_PATH="%KAFKA_HOME%\bin"
 rem setx PATH "%PATH%;%NEW_PATH%"
-rem echo Se ha añadido %NEW_PATH% a la variable PATH.
+rem echo Se ha aï¿½adido %NEW_PATH% a la variable PATH.
 
 set FILE_SERVER="C:\kafka\config\server.properties"
 

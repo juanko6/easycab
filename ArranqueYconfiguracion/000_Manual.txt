@@ -6,11 +6,8 @@ INSTALACION EN EQUIPO KAFKA:
 Ejecutar 00_INSTALACION_KAFKA.bat
  *Incluir %KAFKA_HOME\bin en variable PATH	si es necesario.
 
-
 ----INICIAR KAFKA----
-Se debe haber ejecutado automaticamente con la instalación, pero si fuera necesario iniciarlo manualmente.
-ArranqueYconfiguracion\iniciarKafka.bat
-**Si se para Kafka antes de volver a ejecutar eliminar C:\tmp
+ejecutar iniciarKafka.bat
 
 ##################################################################
 INSTALACION EN RESTO DE EQUIPOS:

@@ -6,6 +6,8 @@ for /f "tokens=1,2 delims==" %%a in (equipo.config) do (
     set %%a=%%b
 )
 
+rmdir /s /q "C:\tmp"
+
 echo Iniciando Zookeeper
 start 1_start_Zookeeper.bat
 
@@ -30,4 +32,5 @@ echo Topics creados:
 call %KAFKA_HOME%\bin\windows\kafka-topics.bat --list --bootstrap-server %IP%:%PORT%
 
 endlocal
+echo Proceso inicio kafka finalizado.
 pause
