@@ -3,7 +3,7 @@ import configparser
 
 def Entorno():
     config = configparser.ConfigParser()
-    config.read('./Arranque y configuracion/equipo.config')
+    config.read('./ArranqueYconfiguracion/equipo.config')
     ip_server = config['Kafka']['IP']
     port_server = config['Kafka']['PORT']
     BOOTSTRAP_SERVER = ip_server+":"+port_server
