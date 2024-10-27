@@ -26,10 +26,6 @@ class EC_DE:
         print("Iniciando productor Kafka")
         self.producer = KafkaProducer(bootstrap_servers=bootstrap)
         
-        # Crear Kafka Consumer para recibir servicios
-        print("Iniciando consumidor Kafka")
-        self.consumerServices = KafkaConsumer(self.topic, bootstrap_servers=bootstrap, auto_offset_reset='latest')
-
         self.running = True  # Variable para controlar el ciclo de ejecución
         
 
@@ -65,20 +61,14 @@ class EC_DE:
 
         return result
 
-    def aceptar_servicios(self):
-        for message in self.consumerServices:
-            mensaje = message.value.decode('utf-8')
-            print(f"mensajes recibidos {mensaje}")            
-            posCliente, posDestino = mensaje.split(";")
-
     def escuchar_asignaciones(self):
         """Escuchar asignaciones de servicios y procesarlas"""
         consumer = KafkaConsumer(
             f"TAXI_{self.ID}",
             bootstrap_servers=BOOTSTRAP_SERVER,
-            group_id=f'group_{self.ID}',
+            auto_offset_reset='earliest',
             enable_auto_commit=True,
-            auto_offset_reset='earliest'
+            group_id=f'group_{self.ID}'
         )
         print(f"[EC_DE] Taxi {self.ID} escuchando asignaciones en topic TAXI_{self.ID}")
 
@@ -92,8 +82,8 @@ class EC_DE:
     def recibir_servicio(self, ubicacion_cliente, destino):
         """Mover el taxi hacia la ubicación del cliente y luego al destino"""
         # Extraer coordenadas del cliente y destino
-        ubicacion_cliente_x, ubicacion_cliente_y = map(int, ubicacion_cliente.strip('[]').split(','))
-        destino_x, destino_y = map(int, destino.strip('[]').split(','))
+        ubicacion_cliente_x, ubicacion_cliente_y = map(int, ubicacion_cliente.strip('()').split(','))
+        destino_x, destino_y = map(int, destino.strip('()').split(','))
 
         # Mover hacia el cliente
         self.mover_hacia(ubicacion_cliente_x, ubicacion_cliente_y, estado="en camino")
@@ -117,6 +107,9 @@ class EC_DE:
                 self.posicion[0] += 1
             elif self.posicion[0] > dest_x:
                 self.posicion[0] -= 1
+
+            self.enviar_posicion_estado()
+            time.sleep(1)
 
             # Movimiento en el eje Y
             if self.posicion[1] < dest_y:

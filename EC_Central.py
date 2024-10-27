@@ -307,11 +307,12 @@ def asignar_taxi(taxi_id, destino, cliente_id):
 
         #3 - Esperar a que el TAXI confirme recogida del CLIENTE
     #TODO: Obtener respuesta confimación de llegada del TAXI 
+    time.sleep(15)
     dashboard.actulizarDatosCliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}") 
     print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}") 
 
         #4 - Esperar a que el TAXI confirme llegada al DESTINO
-    #TODO: Obtener respuesta confimación de llegada del TAXI    
+    #TODO: Obtener respuesta confimación de llegada del TAXI   
     print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}") 
 
         #5 - Poner TAXI disponible y cambiar a nueva ubicacion del CLIENTE.
