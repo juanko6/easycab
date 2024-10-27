@@ -247,7 +247,7 @@ def iniciar_ubicacion_cliente(id, dashboard):
     if id not in clientes:
         fila = random.randint(0, MAPA_FILAS - 1)
         columna = random.randint(0, MAPA_COLUMNAS - 1)
-        ubicacion = (fila, columna)
+        ubicacion = (columna, fila)
         # if ubicacion not in ubicaciones_ocupadas: //Permitimos que dos clientes puedan estar en la misma ubicación.
         if id not in clientes:
             clientes[id] = ubicacion
@@ -305,25 +305,38 @@ def asignar_taxi(taxi_id, destino, cliente_id):
     producer.send(topic_taxi, value=servicio.encode('utf-8'))
     producer.flush()
 
-        #3 - Esperar a que el TAXI confirme recogida del CLIENTE
-    #TODO: Obtener respuesta confimación de llegada del TAXI 
-    time.sleep(15)
+    #3 - Esperar a que el TAXI confirme recogida del CLIENTE
+    #TODO: Obtener respuesta confimación de llegada del TAXI
+    # Esperar confirmación de recogida
+    consumidor = KafkaConsumer("EC_Central", bootstrap_servers=BOOTSTRAP_SERVER, auto_offset_reset='earliest')
+    for mensaje in consumidor:
+        contenido = mensaje.value.decode('utf-8')
+        id_taxi, estado = contenido.split(";")
+        if int(id_taxi) == taxi_id and estado == "en servicio":
+            dashboard.actulizarDatosCliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}")
+            print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}")
+            break
+
     dashboard.actulizarDatosCliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}") 
     print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}") 
 
-        #4 - Esperar a que el TAXI confirme llegada al DESTINO
+
+
+    #4 - Esperar a que el TAXI confirme llegada al DESTINO
     #TODO: Obtener respuesta confimación de llegada del TAXI   
-    print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}") 
-
-        #5 - Poner TAXI disponible y cambiar a nueva ubicacion del CLIENTE.
-    taxis_disponibles.add(taxi_id) 
-    clientes[cliente_id] = posDetino
-    columna, fila = posDetino
-    dashboard.actulizarDatosCliente(cliente_id, columna, fila, "FIN")
-
-    # Enviar FIN servicio al cliente
-    enviar_respuesta_cliente(cliente_id, "FIN")
-    dashboard.actualizar_clientes()
+    # Esperar confirmación de llegada al destino
+    for mensaje in consumidor:
+        contenido = mensaje.value.decode('utf-8')
+        id_taxi, estado = contenido.split(";")
+        if int(id_taxi) == taxi_id and estado == "Destino":
+            print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}")
+            taxis_disponibles.add(taxi_id)
+            clientes[cliente_id] = posDetino
+            columna, fila = posDetino
+            dashboard.actulizarDatosCliente(cliente_id, columna, fila, "FIN")
+            enviar_respuesta_cliente(cliente_id, "FIN")
+            dashboard.actualizar_clientes()
+            break
 
 # Función para enviar la respuesta al cliente
 def enviar_respuesta_cliente(cliente_id, respuesta):

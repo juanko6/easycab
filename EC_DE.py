@@ -139,6 +139,7 @@ class EC_DE:
                 print(f"Taxi {self.ID} en espera de conexión con el sensor.")
             else:
                 estado_sensor = leer_estado_sensor(self.ID)
+                print(f"Taxi {self.ID} sensor conectado con estado {estado_sensor}. ")
                 if estado_sensor == "OK":
                     self.estado = "Disponible"
                 else:
