@@ -126,7 +126,7 @@ class EC_DE:
     def enviar_posicion_estado(self):
         """Enviar la posición y el estado actual a Kafka."""
         mensaje = f"Taxi {self.ID}: Posicion {self.posicion}, Estado {self.estado}"
-        self.producer.send(self.topic, value=mensaje.encode('utf-8'))
+        self.producer.send(f"ST_{self.ID}", value=mensaje.encode('utf-8'))
         self.producer.flush()
         print(f"[EC_DE] Enviando posición y estado del taxi: {mensaje}")
 

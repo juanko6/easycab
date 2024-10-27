@@ -308,8 +308,13 @@ def asignar_taxi(taxi_id, destino, cliente_id):
     #3 - Esperar a que el TAXI confirme recogida del CLIENTE
     #TODO: Obtener respuesta confimación de llegada del TAXI
     # Esperar confirmación de recogida
-    consumidor = KafkaConsumer("EC_Central", bootstrap_servers=BOOTSTRAP_SERVER, auto_offset_reset='earliest')
+    consumidor = KafkaConsumer(f"ST_{taxi_id}", 
+                               bootstrap_servers=BOOTSTRAP_SERVER, 
+                                      auto_offset_reset='earliest',
+                                      enable_auto_commit=True,
+                                      group_id=f"group_Servicios")
     for mensaje in consumidor:
+        print(f"|||||||||||||||{mensaje}||||||||||")
         contenido = mensaje.value.decode('utf-8')
         id_taxi, estado = contenido.split(";")
         if int(id_taxi) == taxi_id and estado == "en servicio":
@@ -317,18 +322,13 @@ def asignar_taxi(taxi_id, destino, cliente_id):
             print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}")
             break
 
-    dashboard.actulizarDatosCliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}") 
-    print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}") 
-
-
-
     #4 - Esperar a que el TAXI confirme llegada al DESTINO
     #TODO: Obtener respuesta confimación de llegada del TAXI   
     # Esperar confirmación de llegada al destino
     for mensaje in consumidor:
         contenido = mensaje.value.decode('utf-8')
         id_taxi, estado = contenido.split(";")
-        if int(id_taxi) == taxi_id and estado == "Destino":
+        if int(id_taxi) == taxi_id and estado == "disponible":
             print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}")
             taxis_disponibles.add(taxi_id)
             clientes[cliente_id] = posDetino
