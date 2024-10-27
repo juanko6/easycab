@@ -229,22 +229,28 @@ def actualizar_dashboard(dashboard):
 ########## CUSTOMER ##########
 #####
 
-def iniciar_ubicaciones_clientes():
-        letras = ['a', 'b', 'c', 'd', 'e']
-        ubicaciones_ocupadas = set()
-        for letra in letras:
-            while True:
-                fila = random.randint(0, MAPA_FILAS - 1)
-                columna = random.randint(0, MAPA_COLUMNAS - 1)
-                ubicacion = (fila, columna)
-                if ubicacion not in ubicaciones_ocupadas:
-                    clientes[letra] = ubicacion
-                    ubicaciones_ocupadas.add(ubicacion)
-                    break
+def iniciar_ubicaciones_clientes(dashboard):
+    letras = ['a', 'b', 'c', 'd', 'e']
+    ubicaciones_ocupadas = set()
+    for letra in letras:
+        while True:
+            fila = random.randint(0, MAPA_FILAS - 1)
+            columna = random.randint(0, MAPA_COLUMNAS - 1)
+            ubicacion = (fila, columna)
+            if ubicacion not in ubicaciones_ocupadas:
+                clientes[letra] = ubicacion
+                ubicaciones_ocupadas.add(ubicacion)
+                dashboard.actulizarDatosCliente(letra, columna, fila, "Esperando")
+                break
+        
+    dashboard.actualizar_cliente()
 
 # Función para gestionar solicitudes de clientes desde el fichero
 def consumir_solicitudes_clientes():        
-        consumer = KafkaConsumer(f'Customer-Central',bootstrap_servers=BOOTSTRAP_SERVER, auto_offset_reset='latest')
+        consumer = KafkaConsumer(f'Customer-Central',bootstrap_servers=BOOTSTRAP_SERVER, 
+                                auto_offset_reset='earliest',
+                                enable_auto_commit=True,
+                                group_id=f"group_Central")
         producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
 
         for message in consumer:
@@ -265,9 +271,11 @@ def consumir_solicitudes_clientes():
 def asignar_taxi(taxi_id, destino, cliente_id):
     producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
     topic_taxi = f"TAXI_{taxi_id}"
+        #0 - Obtener ubicación de destino
+    posDetino = getPosDestino(destino)
         #1 - obtener ubicacion CLIENTE.
     ubicacion_Cliente = clientes[cliente_id]
-    servicio = f"{ubicacion_Cliente};{destino}"
+    servicio = f"{ubicacion_Cliente};{posDetino}"
         #2 - Enviar TAXI a por CLIENTE.
     print(f"Servicio para {topic_taxi}: {servicio}")
     producer.send(topic_taxi, value=servicio.encode('utf-8'))
@@ -280,10 +288,11 @@ def asignar_taxi(taxi_id, destino, cliente_id):
     print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}") 
         #5 - Poner TAXI disponible y cambiar a nueva ubicacion del CLIENTE.
     taxis_disponibles.add(taxi_id) 
-    clientes[cliente_id] = destino
+    clientes[cliente_id] = posDetino
 
     # Enviar FIN servicio al cliente
     enviar_respuesta_cliente(cliente_id, "FIN")
+    dashboard.actualizar_cliente()
 
 # Función para enviar la respuesta al cliente
 def enviar_respuesta_cliente(cliente_id, respuesta):
@@ -293,6 +302,16 @@ def enviar_respuesta_cliente(cliente_id, respuesta):
     producer.send('Central-Customer', value=mensaje.encode('utf-8'))
     producer.flush()
 
+def getPosDestino(destino):
+    valor = None
+    for pos, valor in dashboard.destinos.items():
+        if valor == destino:
+            return pos
+            break
+    if valor is None:
+        print(f"No se encontro destino {destino}")
+        return (1,1)
+    
 #####
 ########## MAIN ##########
 #####
@@ -306,11 +325,13 @@ if __name__ == "__main__":
     PORT_CENTRAL = int(sys.argv[2])
     print(f"***** [EC_Central] ***** Iniciando con IP: {IP_CENTRAL} y Puerto: {PORT_CENTRAL}")
 
+    # Iniciar el dashboard en el hilo principal
+    dashboard = Dashboard()
     # Inicializar el fichero que actuará como base de datos
     inicializar_fichero()
     # Cargar los taxis disponibles al iniciar la central
     cargar_taxis_disponibles()
-    iniciar_ubicaciones_clientes()
+    iniciar_ubicaciones_clientes(dashboard)
 
     # Iniciar el servidor de autenticación por socket en un hilo separado
     hilo_servidor = threading.Thread(target=iniciar_autenticacion_taxis, args=(IP_CENTRAL, PORT_CENTRAL))
@@ -327,8 +348,6 @@ if __name__ == "__main__":
     hilo_consumir_posiciones.daemon = True
     hilo_consumir_posiciones.start()
 
-    # Iniciar el dashboard en el hilo principal
-    dashboard = Dashboard()
 
     dashboard.after(1000, actualizar_dashboard, dashboard)
     dashboard.mainloop()
