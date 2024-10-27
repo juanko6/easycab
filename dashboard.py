@@ -221,7 +221,7 @@ class Dashboard(tk.Tk):
                         y = posicion[1]
 
                         # Actualizar el diccionario de taxis
-                        self.taxis[taxi_id] = {"posicion": [x, y], "estado": estado}
+                        self.taxis[int(taxi_id)] = {"posicion": [x, y], "estado": estado}
                         print(f"[Dashboard] Taxi {taxi_id} - Posición: [{x}, {y}], Estado: {estado}")
                         
                     except ValueError:
