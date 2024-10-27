@@ -56,7 +56,7 @@ def guardar_en_fichero(taxi_id, posicion=None, estado=None):
         lineas = ["TaxiID;Posicion;Estado\n"]
 
     for idx, linea in enumerate(lineas):
-        if linea.startswith(f"{taxi_id},"):
+        if linea.startswith(f"{taxi_id};"):
             taxi_encontrado = True
             lineas[idx] = f"{taxi_id};[{int(posicion[0])},{int(posicion[1])}];{estado}\n"
             break
@@ -198,7 +198,10 @@ def consumir_posiciones_taxis():
     consumer = KafkaConsumer(
                     *current_topics,
                     bootstrap_servers=BOOTSTRAP_SERVER,
+                    enable_auto_commit=True,
+                    group_id=f"group_taxis",
                     auto_offset_reset='earliest'
+                    
                 )    
 
     thread = threading.Thread(target=subscribir_NuevotopicTaxi, args=(consumer, current_topics))
