@@ -2,7 +2,9 @@ import sys
 import time
 import json
 from kafka import KafkaProducer, KafkaConsumer
+import configuracion
 
+BOOTSTRAP_SERVER = configuracion.Entorno()
 FICHERO_SOLICITUDES = "Requests/EC_Requests.json"
 #FICHERO_SOLICITUDES = "SolicitudesClientes/prueba"
 
@@ -59,15 +61,15 @@ class Customer ():
 
 ########## MAIN ##########
 
-if len(sys.argv) != 4:
-    print("Uso: python EC_Customer.py <BrokerIP> <BrokerPuerto> <ClienteID>")
+if len(sys.argv) != 2:
+    print("Uso: python EC_Customer.py <ClienteID>")
     sys.exit(1)
-#TODO: Es necesario pasar la IP del broker, esto lo podemos coger equipo.config
-broker_ip = sys.argv[1]
-broker_puerto = sys.argv[2]
-cliente_id = sys.argv[3]
 
-bootstrap = f'{broker_ip}:{broker_puerto}'
+#broker_ip = sys.argv[1]
+#broker_puerto = sys.argv[2]
+cliente_id = sys.argv[1]
+
+#bootstrap = f'{broker_ip}:{broker_puerto}'
 print(f"Crear cliente '{cliente_id}'")
-cliente = Customer(cliente_id, bootstrap)
+cliente = Customer(cliente_id, BOOTSTRAP_SERVER)
 cliente.start()

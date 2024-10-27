@@ -3,6 +3,7 @@ import re
 import random
 import json
 
+DB_TAXIS = "taxis_db.txt"
 # Dimensiones del tablero y el mapa (20x20)
 MAPA_FILAS = 20
 MAPA_COLUMNAS = 20
@@ -72,8 +73,8 @@ class Dashboard(tk.Tk):
                 y2 = y1 + TAMANO_CELDA
                 self.mapa[fila][columna] = self.canvas.create_rectangle(x1, y1, x2, y2, fill="white", outline="black")
 
-        # Generar 6 destinos aleatorios
-        self.generar_destinos_aleatorios()
+        # Generar destinos desde JSON
+        self.generar_destinos()
 
         # Guardar la última posición de cada taxi
         self.ultima_posicion_taxis = {}
@@ -84,17 +85,17 @@ class Dashboard(tk.Tk):
         # Iniciar la actualización periódica del mapa
         self.actualizar_mapa_periodicamente()
 
-    def generar_destinos_aleatorios(self):
+    def generar_destinos(self):
         # Leer el archivo JSON
         with open(FICHERO_SOLICITUDES, "r") as file:
             data = json.load(file)
 
         # Obtener la lista de locations
         locations = data["locations"]
-        print(f"LocationS: {locations}")
+        #print(f"LocationS: {locations}")
         # Iterar por cada location
         for location in locations:            
-            print(f"1-Location: {location}")
+            print(f"Location: {location}")
             letra = location['Id']
             Pos = location['POS']
             fila, columna = map(int, Pos.split(","))
@@ -170,24 +171,21 @@ class Dashboard(tk.Tk):
 
     def leer_fichero_taxis(self):
         try:
-            with open("taxis_db.txt", "r") as file:
+            with open(DB_TAXIS, "r") as file:
                 lineas = file.readlines()[1:]  # Omitir la cabecera
                 for linea in lineas:
-                    # Usar regex para capturar taxi_id, posición [x, y], y estado
-                    match = re.match(r"(\d+),\[(\d+),(\d+)\],(\w+)", linea.strip())
-                    print(f"Partes encontradas: {lineas}")
-                    if match:
-                        taxi_id = int(match.group(1))
-                        x = int(match.group(2))
-                        y = int(match.group(3))
-                        estado = match.group(4)
+                    try:
+                        taxi_id, posicion, estado = linea.strip().split(";")  # Leer TaxiID, Posicion, Estado
+                        posicion = list(map(int, posicion.strip("[]").split(",")))  # Convertir la posición a lista [x, y]
+                        x = posicion[0]
+                        y = posicion[1]
 
                         # Actualizar el diccionario de taxis
                         self.taxis[taxi_id] = {"posicion": [x, y], "estado": estado}
-                        print(f"Taxi {taxi_id} - Posición: [{x}, {y}], Estado: {estado}")
-                    else:
-                        print(f"Error al procesar la línea: {linea.strip()}")
-                        print(f"Representación de la línea: {repr(linea)}")
+                        print(f"[Dashboard] Taxi {taxi_id} - Posición: [{x}, {y}], Estado: {estado}")
+                        
+                    except ValueError:
+                        print(f"[Dashboard Error] al leer la línea: {linea.strip()}")  # Manejar líneas mal formateadas
         except FileNotFoundError:
             print("No se encontró el fichero de taxis.")
 

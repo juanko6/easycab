@@ -10,3 +10,10 @@ def Entorno():
     print("Configuración [kafka] en " + BOOTSTRAP_SERVER)
 
     return BOOTSTRAP_SERVER
+
+def LicenciasTaxis():
+    config = configparser.ConfigParser()
+    config.read('./ArranqueYconfiguracion/equipo.config')  
+    max = int(config['LICENCIAS']['MAX'])
+    print(f"Máximo de licencias taxis permitidas: {max}")  
+    return max
