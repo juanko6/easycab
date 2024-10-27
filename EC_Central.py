@@ -82,11 +82,13 @@ def cargar_taxis_disponibles():
             try:
                 taxi_id, posicion, estado = line.strip().split(";")  # Leer TaxiID, Posicion, Estado
                 posicion = list(map(int, posicion.strip("[]").split(",")))  # Convertir la posición a lista [x, y]
-                print(f"Lineas separadas {taxi_id}, {posicion}, {estado}")
+                print(f"Ultimo estado guardado: {taxi_id}, {posicion}, {estado}")
+                estado = "esperandoconexion" #Al cargar desde fichero ponemos estado esperando por defecto hasta que recibamos el estado real del taxi.
                 if(autenticar_taxi(int(taxi_id))>0): 
                     print(f"Taxi {taxi_id} cargado: Posicion {posicion}, Estado {estado}")
                     if(estado=="Disponible"):              
                         taxis_disponibles.add(int(taxi_id))
+                    guardar_en_fichero(int(taxi_id),posicion, estado) #Guardamos el nuevo estado.
                 else:
                     print(f"Antiguo taxi {taxi_id} no se ha podido autenticar.")
             except ValueError:
@@ -155,7 +157,8 @@ def autenticar_taxi(idTaxi):
         return -1  # ID fuera de rango
 
 # Función para iniciar el servidor de autenticación
-def iniciar_autenticacion_taxis(IP_CENTRAL, PORT_CENTRAL):
+def iniciar_autenticacion_taxis(IP_CENTRAL, PORT_CENTRAL):    
+    print("***Inicio hilo autenticación taxis***")
     ADDR = (IP_CENTRAL, PORT_CENTRAL)
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(ADDR)
@@ -192,29 +195,34 @@ def subscribir_NuevotopicTaxi(consumer, current_topics):
     
 # Función para consumir los mensajes desde los topics específicos de cada taxi
 def consumir_posiciones_taxis():
+    print("***Inicio hilo consumir taxis***")
     current_topics = set(obtener_topics_taxi())
 
     print(f"Creando consumidor para topics de TAXI: {current_topics}")
     consumer = KafkaConsumer(
                     *current_topics,
                     bootstrap_servers=BOOTSTRAP_SERVER,
+                    auto_offset_reset='earliest',
                     enable_auto_commit=True,
-                    group_id=f"group_taxis",
-                    auto_offset_reset='earliest'
-                    
-                )    
-
+                    group_id=f"group_taxis"                    
+                )   
     thread = threading.Thread(target=subscribir_NuevotopicTaxi, args=(consumer, current_topics))
-    thread.start()
+    thread.start() 
     
-    if consumer.subscription() is not None:        
+    if consumer.subscription() is not None:              
         for mensaje in consumer:
+            print("||Escuchando taxis||")  
             contenido = mensaje.value.decode('utf-8')
             if "Posicion" in contenido and "Estado" in contenido:
                 taxi_id_str, resto = contenido.split(": Posicion ")
                 taxi_id = int(taxi_id_str.split()[1])  # Obtener el ID del taxi
                 posicion_str, estado = resto.split(", Estado ")
                 posicion = list(map(int, posicion_str.strip('[]').split(',')))  # Convertir la posición a lista
+
+                if(taxi_id in taxis_disponibles and estado !="Disponible"):   
+                    taxis_disponibles.discard(taxi_id)
+                elif (taxi_id not in taxis_disponibles and estado =="Disponible"):
+                    taxis_disponibles.add(taxi_id)
 
                 print(f"Taxi {taxi_id} - Posición: {posicion}, Estado: {estado}")
                 guardar_en_fichero(taxi_id, posicion, estado)
@@ -232,43 +240,53 @@ def actualizar_dashboard(dashboard):
 ########## CUSTOMER ##########
 #####
 
-def iniciar_ubicaciones_clientes(dashboard):
-    letras = ['a', 'b', 'c', 'd', 'e']
-    ubicaciones_ocupadas = set()
-    for letra in letras:
-        while True:
-            fila = random.randint(0, MAPA_FILAS - 1)
-            columna = random.randint(0, MAPA_COLUMNAS - 1)
-            ubicacion = (fila, columna)
-            if ubicacion not in ubicaciones_ocupadas:
-                clientes[letra] = ubicacion
-                ubicaciones_ocupadas.add(ubicacion)
-                dashboard.actulizarDatosCliente(letra, columna, fila, "Esperando")
-                break
-        
-    dashboard.actualizar_cliente()
+def iniciar_ubicacion_cliente(id, dashboard):
+    # letras = ['a', 'b', 'c', 'd', 'e']
+    # ubicaciones_ocupadas = set()
+
+    if id not in clientes:
+        fila = random.randint(0, MAPA_FILAS - 1)
+        columna = random.randint(0, MAPA_COLUMNAS - 1)
+        ubicacion = (fila, columna)
+        # if ubicacion not in ubicaciones_ocupadas: //Permitimos que dos clientes puedan estar en la misma ubicación.
+        if id not in clientes:
+            clientes[id] = ubicacion
+            dashboard.actulizarDatosCliente(id, columna, fila, "Esperando")    
+    
+    # for letra in letras:
+    #     while True:
+    #         fila = random.randint(0, MAPA_FILAS - 1)
+    #         columna = random.randint(0, MAPA_COLUMNAS - 1)
+    #         ubicacion = (fila, columna)
+    #         if ubicacion not in ubicaciones_ocupadas:
+    #             clientes[letra] = ubicacion
+    #             ubicaciones_ocupadas.add(ubicacion)
+    #             dashboard.actulizarDatosCliente(letra, columna, fila, "Esperando")
+    #             break
+
+    dashboard.actualizar_clientes()
 
 # Función para gestionar solicitudes de clientes desde el fichero
-def consumir_solicitudes_clientes():        
-        consumer = KafkaConsumer(f'Customer-Central',bootstrap_servers=BOOTSTRAP_SERVER, 
-                                auto_offset_reset='earliest',
-                                enable_auto_commit=True,
-                                group_id=f"group_Central")
-        producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
-
-        for message in consumer:
-            solicitud = message.value.decode('utf-8')
-            print(f"Nueva solicitud: {solicitud}")    
-            cliente_id, destino = solicitud.split(";")
-        
-            print(f"Disponibles:....{taxis_disponibles}")
-            if taxis_disponibles:
-                taxi_id_disponible = taxis_disponibles.pop() # Obtener taxi y marcar como no disponible
-                enviar_respuesta_cliente(cliente_id, "OK")  # Enviar OK servicio aceptado.
-                asignar_taxi(taxi_id_disponible, destino, cliente_id)                
-            else:
-                enviar_respuesta_cliente(cliente_id, "KO")  # Enviar KO si no hay taxis
-                print("No hay taxis disponibles en este momento")                  
+def consumir_solicitudes_clientes():         
+    print("***Inicio hilo cliente***")       
+    consumer = KafkaConsumer(f'Customer-Central',bootstrap_servers=BOOTSTRAP_SERVER, 
+                            auto_offset_reset='earliest',
+                            enable_auto_commit=True,
+                            group_id=f"group_Clientes")
+    
+    for message in consumer:
+        solicitud = message.value.decode('utf-8')
+        print(f"Nueva solicitud: {solicitud}")                
+        cliente_id, destino = solicitud.split(";")        
+        print(f"Disponibles:....{taxis_disponibles}")
+        if taxis_disponibles:
+            taxi_id_disponible = taxis_disponibles.pop() # Obtener taxi y marcar como no disponible
+            iniciar_ubicacion_cliente(cliente_id, dashboard)
+            enviar_respuesta_cliente(cliente_id, "OK")  # Enviar OK servicio aceptado.
+            asignar_taxi(taxi_id_disponible, destino, cliente_id)                
+        else:
+            enviar_respuesta_cliente(cliente_id, "KO")  # Enviar KO si no hay taxis
+            print("No hay taxis disponibles en este momento")                  
 
 # Función para asignar un taxi a una solicitud
 def asignar_taxi(taxi_id, destino, cliente_id):
@@ -277,25 +295,34 @@ def asignar_taxi(taxi_id, destino, cliente_id):
         #0 - Obtener ubicación de destino
     posDetino = getPosDestino(destino)
         #1 - obtener ubicacion CLIENTE.
-    ubicacion_Cliente = clientes[cliente_id]
-    servicio = f"{ubicacion_Cliente};{posDetino}"
+    ubicacion_Cliente = clientes[cliente_id]    
+    columna, fila = ubicacion_Cliente
+    dashboard.actulizarDatosCliente(cliente_id, columna, fila, "OK. Sin Taxi") 
+
         #2 - Enviar TAXI a por CLIENTE.
+    servicio = f"{ubicacion_Cliente};{posDetino}"
     print(f"Servicio para {topic_taxi}: {servicio}")
     producer.send(topic_taxi, value=servicio.encode('utf-8'))
     producer.flush()
+
         #3 - Esperar a que el TAXI confirme recogida del CLIENTE
-    #TODO: Obtener respuesta confimación de llegada del TAXI    
+    #TODO: Obtener respuesta confimación de llegada del TAXI 
+    dashboard.actulizarDatosCliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}") 
     print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}") 
+
         #4 - Esperar a que el TAXI confirme llegada al DESTINO
     #TODO: Obtener respuesta confimación de llegada del TAXI    
     print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}") 
+
         #5 - Poner TAXI disponible y cambiar a nueva ubicacion del CLIENTE.
     taxis_disponibles.add(taxi_id) 
     clientes[cliente_id] = posDetino
+    columna, fila = posDetino
+    dashboard.actulizarDatosCliente(cliente_id, columna, fila, "FIN")
 
     # Enviar FIN servicio al cliente
     enviar_respuesta_cliente(cliente_id, "FIN")
-    dashboard.actualizar_cliente()
+    dashboard.actualizar_clientes()
 
 # Función para enviar la respuesta al cliente
 def enviar_respuesta_cliente(cliente_id, respuesta):
@@ -334,7 +361,7 @@ if __name__ == "__main__":
     inicializar_fichero()
     # Cargar los taxis disponibles al iniciar la central
     cargar_taxis_disponibles()
-    iniciar_ubicaciones_clientes(dashboard)
+    #iniciar_ubicacion_cliente('a', dashboard)
 
     # Iniciar el servidor de autenticación por socket en un hilo separado
     hilo_servidor = threading.Thread(target=iniciar_autenticacion_taxis, args=(IP_CENTRAL, PORT_CENTRAL))
@@ -345,7 +372,7 @@ if __name__ == "__main__":
     hilo_consumir_posiciones = threading.Thread(target=consumir_posiciones_taxis)
     hilo_consumir_posiciones.daemon = True
     hilo_consumir_posiciones.start()
-
+    
     # Hilo para peticiones clientes
     hilo_consumir_posiciones = threading.Thread(target=consumir_solicitudes_clientes)
     hilo_consumir_posiciones.daemon = True

@@ -111,7 +111,7 @@ class Dashboard(tk.Tk):
     def actulizarDatosCliente(self, id_cliente, columna, fila, estado):
         self.clientes[id_cliente] = {"posicion": [columna, fila], "estado": estado}
 
-    def actualizar_cliente(self):
+    def actualizar_clientes(self):
         for cliente_id, info in self.clientes.items():
             fila, columna = info["posicion"]
             estado = info["estado"]
@@ -140,6 +140,19 @@ class Dashboard(tk.Tk):
                 columna * TAMANO_CELDA + TAMANO_CELDA // 2,
                 fila * TAMANO_CELDA + TAMANO_CELDA // 2,
                 text=str(cliente_id), fill="black", font=('Arial', 12, 'bold')
+            )
+
+            # Actualizar el estado en la tabla de clientes (fuera del mapa)
+            if f"estado_{cliente_id}" in self.textos_celdas:
+                self.canvas.delete(self.textos_celdas[f"estado_{cliente_id}"])
+                del self.textos_celdas[f"estado_{cliente_id}"]  # Eliminar del diccionario para evitar referencias
+
+            # Crear el nuevo texto para el estado del cliente en la tabla (asegurar que no se solapen)
+            #posicion_y_estado = 120 + cliente_id * 20  # Ajustar la posición para que no se monten
+            posicion_y_estado = 120 * 20  # Ajustar la posición para que no se monten
+            self.textos_celdas[f"estado_{cliente_id}"] = self.canvas.create_text(
+                300, posicion_y_estado,  # Ajusta las coordenadas para la tabla
+                text=estado, fill="black", font=('Arial', 12, 'bold')
             )
 
     def actualizar_taxis(self):
@@ -243,4 +256,4 @@ class Dashboard(tk.Tk):
             
 if __name__ == "__main__":
     dashboard = Dashboard()
-    dashboard.mainloop()
+    #dashboard.mainloop()
