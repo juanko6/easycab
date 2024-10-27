@@ -50,12 +50,14 @@ class EC_DE:
 
             if result == 1:
                 print("Taxi autenticado correctamente.")
+            elif result == 2:
+                print("Taxi con ID ya estaba registrado.")
             elif result == -1:
-                print("Taxi con ID duplicado.")
-            elif result == -2:
                 print("ID fuera de rango. Solo permitido [0..99].")
+            elif result == -3:
+                print("Mensaje de autenticación incorrecto.")
             else:
-                print("Error en la autenticación del taxi.")
+                print("Error desconocido en la autenticación del taxi.")
 
             client.close()
         except Exception as e:

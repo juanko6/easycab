@@ -1,0 +1,14 @@
+En equipo.config configurar con los datos del equipo que ejecute KAFKA
+PORT = Puerto servidor KAFKA
+PORT = Puerto ZOOKEEPER
+##################################################################
+INSTALACION EN EQUIPO KAFKA:
+Ejecutar 00_INSTALACION_KAFKA.bat
+ *Incluir %KAFKA_HOME\bin en variable PATH	si es necesario.
+
+----INICIAR KAFKA----
+ejecutar iniciarKafka.bat
+
+##################################################################
+INSTALACION EN RESTO DE EQUIPOS:
+Ejecutar  00_INSTALACION_NORMAL.bat

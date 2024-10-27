@@ -2,14 +2,15 @@ import sys
 import time
 import json
 from kafka import KafkaProducer, KafkaConsumer
+import configuracion
 
-FICHERO_SOLICITUDES = "Requests/EC_Requests.json"
-#FICHERO_SOLICITUDES = "SolicitudesClientes/prueba"
+BOOTSTRAP_SERVER = configuracion.Entorno()
+FICHERO_SOLICITUDES = "EC_Requests/Requests.json"
 
 class Customer ():
-    def __init__(self, ID, bootstrap):
+    def __init__(self, ID, bootstrap, solicitudes):
         self.ID = ID
-        self.FicheroDetinos = f"{ID}_{FICHERO_SOLICITUDES}"
+        self.FicheroDetinos = f"{solicitudes}"
         
         # Crear Kafka Producer para enviar solicitudes
         print("Iniciando productor Kafka")
@@ -17,7 +18,11 @@ class Customer ():
         
         # Crear Kafka Consumer para recibir respuestas
         print("Iniciando consumidor Kafka")
-        self.consumer = KafkaConsumer('Central-Customer',bootstrap_servers=bootstrap, auto_offset_reset='earliest')
+        self.consumer = KafkaConsumer('Central-Customer',
+                                      bootstrap_servers=bootstrap, 
+                                      auto_offset_reset='earliest',
+                                      enable_auto_commit=True,
+                                      group_id=f"group_{self.ID}")
 
     def start(self):        
         print(f"Abrir fichero solicitudes: {self.FicheroDetinos}")
@@ -36,7 +41,7 @@ class Customer ():
 
             # Esperar la respuesta para la solicitud automática
             self.recibir_respuesta()
-            print(f"{self.ID}: Esperando nueva solicitud.")
+            print(f"{self.ID}: Esperando para nueva solicitud.")
             time.sleep(4)
         
         print(f"{self.ID}: Ya no tengo más destinos. Bye bye.")
@@ -51,23 +56,28 @@ class Customer ():
                 print(f"Respuesta de la central para el cliente '{self.ID}': {respuesta}")
                 # Si recibimos "OK" o "KO", la solicitud ha sido procesada
                 if respuesta == "OK":
-                    print(f"Servicio completado.")
-                    break
+                    print(f"Servicio aceptado.") #Esperamos a que se complete.
                 elif respuesta == "KO":
                     print(f"Servicio anulado.")
-                    break
+                    break   #Salimos para pedir otro servicio.
+                elif respuesta == "FIN":
+                    print(f"Servicio completado.")
+                    break  #Salimos para pedir otro servicio.
+            else:
+                print(f"{self.ID}:No es para mi lo obvio")
 
 ########## MAIN ##########
 
-if len(sys.argv) != 4:
-    print("Uso: python EC_Customer.py <BrokerIP> <BrokerPuerto> <ClienteID>")
+if len(sys.argv) != 3 :
+    print("Uso: python EC_Customer.py <ClienteID> <Fichero Requests>" )
     sys.exit(1)
-#TODO: Es necesario pasar la IP del broker, esto lo podemos coger equipo.config
-broker_ip = sys.argv[1]
-broker_puerto = sys.argv[2]
-cliente_id = sys.argv[3]
 
-bootstrap = f'{broker_ip}:{broker_puerto}'
+#broker_ip = sys.argv[1]
+#broker_puerto = sys.argv[2]
+cliente_id = sys.argv[1]
+ficheroSolicitudes = sys.argv[2]
+
+#bootstrap = f'{broker_ip}:{broker_puerto}'
 print(f"Crear cliente '{cliente_id}'")
-cliente = Customer(cliente_id, bootstrap)
+cliente = Customer(cliente_id, BOOTSTRAP_SERVER, ficheroSolicitudes)
 cliente.start()
