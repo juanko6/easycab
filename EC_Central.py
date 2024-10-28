@@ -194,6 +194,7 @@ def subscribir_NuevotopicTaxi(consumer, current_topics):
         time.sleep(REFRESH_INTERVAL)
     
 # Función para consumir los mensajes desde los topics específicos de cada taxi
+# Función para consumir los mensajes desde los topics específicos de cada taxi
 def consumir_posiciones_taxis():
     print("***Inicio hilo consumir taxis***")
     current_topics = set(obtener_topics_taxi())
@@ -204,28 +205,28 @@ def consumir_posiciones_taxis():
                     bootstrap_servers=BOOTSTRAP_SERVER,
                     auto_offset_reset='earliest',
                     enable_auto_commit=True,
-                    group_id=f"group_taxis"                    
+                    group_id="group_taxis"                    
                 )   
     thread = threading.Thread(target=subscribir_NuevotopicTaxi, args=(consumer, current_topics))
     thread.start() 
-    
-    if consumer.subscription() is not None:              
-        for mensaje in consumer:
-            print("||Escuchando taxis||")  
-            contenido = mensaje.value.decode('utf-8')
-            if "Posicion" in contenido and "Estado" in contenido:
-                taxi_id_str, resto = contenido.split(": Posicion ")
-                taxi_id = int(taxi_id_str.split()[1])  # Obtener el ID del taxi
-                posicion_str, estado = resto.split(", Estado ")
-                posicion = list(map(int, posicion_str.strip('[]').split(',')))  # Convertir la posición a lista
 
-                if(taxi_id in taxis_disponibles and estado !="Disponible"):   
-                    taxis_disponibles.discard(taxi_id)
-                elif (taxi_id not in taxis_disponibles and estado =="Disponible"):
-                    taxis_disponibles.add(taxi_id)
+    for mensaje in consumer:
+        print("||Escuchando taxis||")  
+        contenido = mensaje.value.decode('utf-8')
+        if "Posicion" in contenido and "Estado" in contenido:
+            taxi_id_str, resto = contenido.split(": Posicion ")
+            taxi_id = int(taxi_id_str.split()[1])  # Obtener el ID del taxi
+            posicion_str, estado = resto.split(", Estado ")
+            posicion = list(map(int, posicion_str.strip('[]').split(',')))  # Convertir la posición a lista
 
-                print(f"Taxi {taxi_id} - Posición: {posicion}, Estado: {estado}")
-                guardar_en_fichero(taxi_id, posicion, estado)
+            # Actualizar la lista de taxis disponibles
+            if taxi_id in taxis_disponibles and estado != "Disponible":   
+                taxis_disponibles.discard(taxi_id)
+            elif taxi_id not in taxis_disponibles and estado == "Disponible":
+                taxis_disponibles.add(taxi_id)
+
+            print(f"Taxi {taxi_id} - Posición: {posicion}, Estado: {estado}")
+            guardar_en_fichero(taxi_id, posicion, estado)  # Guardar estado en el fichero
 
 # Función para actualizar el dashboard con nuevos estados
 def actualizar_dashboard(dashboard):
@@ -313,6 +314,15 @@ def asignar_taxi(taxi_id, destino, cliente_id):
                                       auto_offset_reset='earliest',
                                       enable_auto_commit=True,
                                       group_id=f"group_Servicios")
+    # Primero, esperar el estado "en camino" antes de "en servicio"
+    for mensaje in consumidor:
+        contenido = mensaje.value.decode('utf-8')
+        id_taxi, estado = contenido.split(";")
+        if int(id_taxi) == taxi_id and estado == "en camino":
+            print(f"Taxi {taxi_id} está en camino hacia el cliente {cliente_id}.")
+            break
+
+    # Luego, esperar el estado "en servicio" cuando el taxi recoge al cliente
     for mensaje in consumidor:
         print(f"|||||||||||||||{mensaje}||||||||||")
         contenido = mensaje.value.decode('utf-8')

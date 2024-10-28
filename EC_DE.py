@@ -92,7 +92,7 @@ class EC_DE:
         self.mover_hacia(destino_x, destino_y, estado="en servicio")
 
         # Finalizar el servicio
-        self.estado = "disponible"
+        self.estado = "Disponible"
         self.enviar_posicion_estado()
         print(f"[EC_DE] Servicio finalizado. Taxi {self.ID} ahora está disponible.")
 
@@ -139,10 +139,13 @@ class EC_DE:
                 print(f"Taxi {self.ID} en espera de conexión con el sensor.")
             else:
                 estado_sensor = leer_estado_sensor(self.ID)
-                print(f"Taxi {self.ID} sensor conectado con estado {estado_sensor}. ")
+                print(f"Taxi {self.ID} sensor conectado con estado {estado_sensor}.")
                 if estado_sensor == "OK":
-                    self.estado = "Disponible"
-                else:
+                # Solo cambiar a "Disponible" si no está en movimiento o en servicio
+                    if self.estado not in ["en camino", "en servicio"]:
+                        self.estado = "Disponible"
+                elif estado_sensor != "OK":
+                # Cambiar a "KO" solo si el sensor indica un problema
                     self.estado = "KO"
                     
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)

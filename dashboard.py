@@ -12,7 +12,8 @@ TAMANO_CELDA = 30  # Tamaño de cada celda del mapa en píxeles
 # Colores para diferentes estados de los taxis
 COLORES_TAXI = {
     "disponible": "green",
-    "encamino": "blue",
+    "en camino": "orange",
+    "en servicio": "purple",
     "incidencia": "orange",
     "ko": "red",
     "esperandoconexion": "grey"
