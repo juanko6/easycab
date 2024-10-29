@@ -69,7 +69,7 @@ def guardar_en_fichero(taxi_id, posicion=None, estado=None):
     with open(DB_TAXIS, "w") as file:
         file.writelines(lineas)
 
-    print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
+    #print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
 
 
 # Función para cargar los taxis disponibles desde el fichero
@@ -211,7 +211,6 @@ def consumir_posiciones_taxis():
     thread.start() 
 
     for mensaje in consumer:
-        print("||Escuchando taxis||")  
         contenido = mensaje.value.decode('utf-8')
         if "Posicion" in contenido and "Estado" in contenido:
             taxi_id_str, resto = contenido.split(": Posicion ")
@@ -225,7 +224,6 @@ def consumir_posiciones_taxis():
             elif taxi_id not in taxis_disponibles and estado == "Disponible":
                 taxis_disponibles.add(taxi_id)
 
-            print(f"Taxi {taxi_id} - Posición: {posicion}, Estado: {estado}")
             guardar_en_fichero(taxi_id, posicion, estado)  # Guardar estado en el fichero
 
 # Función para actualizar el dashboard con nuevos estados
@@ -253,17 +251,6 @@ def iniciar_ubicacion_cliente(id, dashboard):
         if id not in clientes:
             clientes[id] = ubicacion
             dashboard.actulizarDatosCliente(id, columna, fila, "Esperando")    
-    
-    # for letra in letras:
-    #     while True:
-    #         fila = random.randint(0, MAPA_FILAS - 1)
-    #         columna = random.randint(0, MAPA_COLUMNAS - 1)
-    #         ubicacion = (fila, columna)
-    #         if ubicacion not in ubicaciones_ocupadas:
-    #             clientes[letra] = ubicacion
-    #             ubicaciones_ocupadas.add(ubicacion)
-    #             dashboard.actulizarDatosCliente(letra, columna, fila, "Esperando")
-    #             break
 
     dashboard.actualizar_clientes()
 
@@ -271,7 +258,7 @@ def iniciar_ubicacion_cliente(id, dashboard):
 def consumir_solicitudes_clientes():         
     print("***Inicio hilo cliente***")       
     consumer = KafkaConsumer(f'Customer-Central',bootstrap_servers=BOOTSTRAP_SERVER, 
-                            auto_offset_reset='earliest',
+                            auto_offset_reset='latest',
                             enable_auto_commit=True,
                             group_id=f"group_Clientes")
     
@@ -283,8 +270,8 @@ def consumir_solicitudes_clientes():
         if taxis_disponibles:
             taxi_id_disponible = taxis_disponibles.pop() # Obtener taxi y marcar como no disponible
             iniciar_ubicacion_cliente(cliente_id, dashboard)
-            enviar_respuesta_cliente(cliente_id, "OK")  # Enviar OK servicio aceptado.
-            asignar_taxi(taxi_id_disponible, destino, cliente_id)                
+            enviar_respuesta_cliente(cliente_id, "OK")  # Enviar OK servicio aceptado.    
+            asignar_taxi(taxi_id_disponible, destino, cliente_id)                         
         else:
             enviar_respuesta_cliente(cliente_id, "KO")  # Enviar KO si no hay taxis
             print("No hay taxis disponibles en este momento")                  
@@ -298,7 +285,7 @@ def asignar_taxi(taxi_id, destino, cliente_id):
         #1 - obtener ubicacion CLIENTE.
     ubicacion_Cliente = clientes[cliente_id]    
     columna, fila = ubicacion_Cliente
-    dashboard.actulizarDatosCliente(cliente_id, columna, fila, "OK. Sin Taxi") 
+    dashboard.refrescar_cliente(cliente_id, columna, fila, "OK. Sin Taxi") 
 
         #2 - Enviar TAXI a por CLIENTE.
     servicio = f"{ubicacion_Cliente};{posDetino}"
@@ -306,46 +293,32 @@ def asignar_taxi(taxi_id, destino, cliente_id):
     producer.send(topic_taxi, value=servicio.encode('utf-8'))
     producer.flush()
 
-    #3 - Esperar a que el TAXI confirme recogida del CLIENTE
-    #TODO: Obtener respuesta confimación de llegada del TAXI
-    # Esperar confirmación de recogida
+    #3 - Esperar a que el TAXI informe estado del servicio
+#     thread = threading.Thread(target=eseprar_servicio_taxi, args=(taxi_id, cliente_id, posDetino, destino))
+#     thread.start()  
+
+# def eseprar_servicio_taxi(taxi_id, cliente_id, posDetino, destino):
     consumidor = KafkaConsumer(f"ST_{taxi_id}", 
                                bootstrap_servers=BOOTSTRAP_SERVER, 
                                       auto_offset_reset='earliest',
                                       enable_auto_commit=True,
                                       group_id=f"group_Servicios")
-    # Primero, esperar el estado "en camino" antes de "en servicio"
-    for mensaje in consumidor:
-        contenido = mensaje.value.decode('utf-8')
-        id_taxi, estado = contenido.split(";")
-        if int(id_taxi) == taxi_id and estado == "en camino":
-            print(f"Taxi {taxi_id} está en camino hacia el cliente {cliente_id}.")
-            break
 
-    # Luego, esperar el estado "en servicio" cuando el taxi recoge al cliente
+    print("Esperando respuesta TAXI")
     for mensaje in consumidor:
-        print(f"|||||||||||||||{mensaje}||||||||||")
         contenido = mensaje.value.decode('utf-8')
-        id_taxi, estado = contenido.split(";")
-        if int(id_taxi) == taxi_id and estado == "en servicio":
-            dashboard.actulizarDatosCliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}")
+        print(f"||||---Respuesta TAXI: {contenido} ---||||")
+        if contenido == "1": #taxi recoge al cliente
+            dashboard.refrescar_cliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}")
             print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}")
-            break
-
-    #4 - Esperar a que el TAXI confirme llegada al DESTINO
-    #TODO: Obtener respuesta confimación de llegada del TAXI   
-    # Esperar confirmación de llegada al destino
-    for mensaje in consumidor:
-        contenido = mensaje.value.decode('utf-8')
-        id_taxi, estado = contenido.split(";")
-        if int(id_taxi) == taxi_id and estado == "disponible":
+        
+        elif contenido == "2": #taxi confirma llegada al destino
             print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}")
             taxis_disponibles.add(taxi_id)
             clientes[cliente_id] = posDetino
             columna, fila = posDetino
-            dashboard.actulizarDatosCliente(cliente_id, columna, fila, "FIN")
+            dashboard.refrescar_cliente(cliente_id, columna, fila, "FIN")
             enviar_respuesta_cliente(cliente_id, "FIN")
-            dashboard.actualizar_clientes()
             break
 
 # Función para enviar la respuesta al cliente
