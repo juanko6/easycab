@@ -294,25 +294,26 @@ def asignar_taxi(taxi_id, destino, cliente_id):
     producer.flush()
 
     #3 - Esperar a que el TAXI informe estado del servicio
-#     thread = threading.Thread(target=eseprar_servicio_taxi, args=(taxi_id, cliente_id, posDetino, destino))
-#     thread.start()  
+#    thread = threading.Thread(target=eseprar_servicio_taxi, args=(taxi_id, cliente_id, posDetino, destino))
+#    thread.start()  
 
-# def eseprar_servicio_taxi(taxi_id, cliente_id, posDetino, destino):
+#def eseprar_servicio_taxi(taxi_id, cliente_id, posDetino, destino):
     consumidor = KafkaConsumer(f"ST_{taxi_id}", 
                                bootstrap_servers=BOOTSTRAP_SERVER, 
-                                      auto_offset_reset='earliest',
+                                      auto_offset_reset='latest',
                                       enable_auto_commit=True,
                                       group_id=f"group_Servicios")
 
     print("Esperando respuesta TAXI")
     for mensaje in consumidor:
-        contenido = mensaje.value.decode('utf-8')
-        print(f"||||---Respuesta TAXI: {contenido} ---||||")
-        if contenido == "1": #taxi recoge al cliente
+        contenido = int(mensaje.value.decode('utf-8'))
+        consumidor.commit()
+        print(f"[SERVICIO] Respuesta TAXI: {contenido}")
+        if contenido == 1: #taxi recoge al cliente
             dashboard.refrescar_cliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}")
             print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}")
         
-        elif contenido == "2": #taxi confirma llegada al destino
+        elif contenido == 2: #taxi confirma llegada al destino
             print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}")
             taxis_disponibles.add(taxi_id)
             clientes[cliente_id] = posDetino

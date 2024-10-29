@@ -89,12 +89,13 @@ class EC_DE:
         # Mover hacia el cliente
         self.mover_hacia(ubicacion_cliente_x, ubicacion_cliente_y)
         print("[Servicion] enviar Parte 1")
+        time.sleep(1)
         self.enviar_estado_servicio("1") #1=Llegada al cliente
 
         self.estado = "en servicio"
         # Cambiar el estado a "en servicio" y moverse al destino
         self.mover_hacia(destino_x, destino_y)
-        print("[Servicion] enviar Parte 2")
+        print("[Servicio] enviar Parte 2")
         self.enviar_estado_servicio("2") #2=Finalizado
 
         # Finalizar el servicio
