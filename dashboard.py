@@ -159,7 +159,7 @@ class Dashboard(tk.Tk):
             #     300, posicion_y_estado,  # Ajusta las coordenadas para la tabla
             #     text=estado, fill="black", font=('Arial', 12, 'bold')
             #)
-        self.actualizar_tabla_cliente()
+        #self.actualizar_tabla_cliente()
 
     def actualizar_tabla_cliente(self):
         # Limpiar la tabla de cliente antes de actualizar
