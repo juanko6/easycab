@@ -215,13 +215,6 @@ class Dashboard(tk.Tk):
                 self.canvas.delete(self.textos_celdas[f"estado_{taxi_id}"])
                 del self.textos_celdas[f"estado_{taxi_id}"]  # Eliminar del diccionario para evitar referencias
 
-            # Crear el nuevo texto para el estado del taxi en la tabla (asegurar que no se solapen)
-            posicion_y_estado = 120 + taxi_id * 20  # Ajustar la posición para que no se monten
-            self.textos_celdas[f"estado_{taxi_id}"] = self.canvas.create_text(
-                300, posicion_y_estado,  # Ajusta las coordenadas para la tabla
-                text=estado, fill="black", font=('Arial', 12, 'bold')
-            )
-
             # Actualizar la última posición del taxi
             self.ultima_posicion_taxis[taxi_id] = (fila, columna)
 
