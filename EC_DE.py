@@ -85,50 +85,52 @@ class EC_DE:
         ubicacion_cliente_x, ubicacion_cliente_y = map(int, ubicacion_cliente.strip('()').split(','))
         destino_x, destino_y = map(int, destino.strip('()').split(','))
 
+        self.estado = "en camino"
         # Mover hacia el cliente
-        self.mover_hacia(ubicacion_cliente_x, ubicacion_cliente_y, estado="en camino")
+        self.mover_hacia(ubicacion_cliente_x, ubicacion_cliente_y)
+        print("[Servicion] enviar Parte 1")
+        time.sleep(1)
+        self.enviar_estado_servicio("1") #1=Llegada al cliente
 
+        self.estado = "en servicio"
         # Cambiar el estado a "en servicio" y moverse al destino
-        self.mover_hacia(destino_x, destino_y, estado="en servicio")
+        self.mover_hacia(destino_x, destino_y)
+        print("[Servicio] enviar Parte 2")
+        self.enviar_estado_servicio("2") #2=Finalizado
 
         # Finalizar el servicio
-        self.estado = "disponible"
-        self.enviar_posicion_estado()
+        self.estado = "Disponible"
         print(f"[EC_DE] Servicio finalizado. Taxi {self.ID} ahora está disponible.")
 
-    def mover_hacia(self, dest_x, dest_y, estado):
-        """Mover el taxi paso a paso hacia una posición objetivo."""
-        self.estado = estado
+    def mover_hacia(self, dest_x, dest_y):
+        #Mover el taxi paso a paso hacia una posición objetivo.
         print(f"[EC_DE] Taxi {self.ID} en estado: {self.estado}. Moviéndose hacia ({dest_x}, {dest_y})")
 
         while self.posicion != [dest_x, dest_y]:
-            # Movimiento en el eje X
-            if self.posicion[0] < dest_x:
-                self.posicion[0] += 1
-            elif self.posicion[0] > dest_x:
-                self.posicion[0] -= 1
+            if self.estado == "en camino" or self.estado == "en servicio":     #Solo mover si se ha activado.
+                # Movimiento en el eje X
+                if self.posicion[0] < dest_x:
+                    self.posicion[0] += 1
+                elif self.posicion[0] > dest_x:
+                    self.posicion[0] -= 1
 
-            self.enviar_posicion_estado()
-            time.sleep(1)
+                time.sleep(1)
 
-            # Movimiento en el eje Y
-            if self.posicion[1] < dest_y:
-                self.posicion[1] += 1
-            elif self.posicion[1] > dest_y:
-                self.posicion[1] -= 1
+                # Movimiento en el eje Y
+                if self.posicion[1] < dest_y:
+                    self.posicion[1] += 1
+                elif self.posicion[1] > dest_y:
+                    self.posicion[1] -= 1
 
-            # Enviar la posición y estado actualizados a Kafka
-            self.enviar_posicion_estado()
-            time.sleep(1)  # Controlar la velocidad de movimiento
+                time.sleep(1)
 
         print(f"[EC_DE] Taxi {self.ID} ha llegado a la posición ({dest_x}, {dest_y})")
 
-    def enviar_posicion_estado(self):
-        """Enviar la posición y el estado actual a Kafka."""
-        mensaje = f"Taxi {self.ID}: Posicion {self.posicion}, Estado {self.estado}"
+    def enviar_estado_servicio(self, mensaje):
+        #Enviar la posición y el estado actual a Kafka.
         self.producer.send(f"ST_{self.ID}", value=mensaje.encode('utf-8'))
         self.producer.flush()
-        print(f"[EC_DE] Enviando posición y estado del taxi: {mensaje}")
+        print(f'Enviando SERVICIO: {mensaje}')
 
     
     # Función que actualiza el estado del taxi basado en el sensor
@@ -139,10 +141,13 @@ class EC_DE:
                 print(f"Taxi {self.ID} en espera de conexión con el sensor.")
             else:
                 estado_sensor = leer_estado_sensor(self.ID)
-                print(f"Taxi {self.ID} sensor conectado con estado {estado_sensor}. ")
+                print(f"Taxi {self.ID} sensor conectado con estado {estado_sensor}.")
                 if estado_sensor == "OK":
-                    self.estado = "Disponible"
-                else:
+                # Solo cambiar a "Disponible" si no está en movimiento o en servicio
+                    if self.estado not in ["en camino", "en servicio"]:
+                        self.estado = "Disponible"
+                elif estado_sensor != "OK":
+                # Cambiar a "KO" solo si el sensor indica un problema
                     self.estado = "KO"
                     
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
@@ -153,10 +158,6 @@ class EC_DE:
     def detener(self):
         print("\n[EC_DE] Apagando el taxi...")
         self.running = False
-
-
-
-
 
 def calcular_lrc(estado):
     lrc = 0
@@ -181,11 +182,11 @@ def verificar_lrc(estado, lrc_recibido):
 
 # Función para manejar la recepción de mensajes del sensor
 def manejar_sensor(conn_sensor):
+    estadoAnterior = "Disponible"
     while True:
         try:
             # Recibir estado del sensor
             estado_sensor = conn_sensor.recv(4096).decode(FORMAT)
-            
             if not estado_sensor:
                 print("Sensor desconectado.")
                 taxi.estado = "esperandoconexion"
@@ -215,8 +216,11 @@ def manejar_sensor(conn_sensor):
 
                 # Cambiar el estado del taxi en función del mensaje recibido
                 if data == "OK":
-                    taxi.estado = "Disponible"
+                    print(estadoAnterior)
+                    taxi.estado = estadoAnterior
                 else:
+                    if taxi.estado == "Disponible" or taxi.estado == "en camino" or taxi.estado ==  "en servicio":
+                        estadoAnterior = taxi.estado
                     taxi.estado = "KO"
                     print(f"Incidencia detectada: {data}")
 

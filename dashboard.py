@@ -12,7 +12,8 @@ TAMANO_CELDA = 30  # Tamaño de cada celda del mapa en píxeles
 # Colores para diferentes estados de los taxis
 COLORES_TAXI = {
     "disponible": "green",
-    "encamino": "blue",
+    "en camino": "orange",
+    "en servicio": "purple",
     "incidencia": "orange",
     "ko": "red",
     "esperandoconexion": "grey"
@@ -108,6 +109,10 @@ class Dashboard(tk.Tk):
                                         fila * TAMANO_CELDA + TAMANO_CELDA // 2,
                                         text=letra, fill="white", font=('Arial', 12, 'bold'))                
 
+    def refrescar_cliente(self, id_cliente, columna, fila, estado):
+        self.actulizarDatosCliente(id_cliente, columna, fila, estado)
+        self.actualizar_clientes()
+
     def actulizarDatosCliente(self, id_cliente, columna, fila, estado):
         self.clientes[id_cliente] = {"posicion": [columna, fila], "estado": estado}
 
@@ -142,18 +147,31 @@ class Dashboard(tk.Tk):
                 text=str(cliente_id), fill="black", font=('Arial', 12, 'bold')
             )
 
-            # Actualizar el estado en la tabla de clientes (fuera del mapa)
-            if f"estado_{cliente_id}" in self.textos_celdas:
-                self.canvas.delete(self.textos_celdas[f"estado_{cliente_id}"])
-                del self.textos_celdas[f"estado_{cliente_id}"]  # Eliminar del diccionario para evitar referencias
+            # # Actualizar el estado en la tabla de clientes (fuera del mapa)
+            # if f"estado_{cliente_id}" in self.textos_celdas:
+            #     self.canvas.delete(self.textos_celdas[f"estado_{cliente_id}"])
+            #     del self.textos_celdas[f"estado_{cliente_id}"]  # Eliminar del diccionario para evitar referencias
 
-            # Crear el nuevo texto para el estado del cliente en la tabla (asegurar que no se solapen)
-            #posicion_y_estado = 120 + cliente_id * 20  # Ajustar la posición para que no se monten
-            posicion_y_estado = 120 * 20  # Ajustar la posición para que no se monten
-            self.textos_celdas[f"estado_{cliente_id}"] = self.canvas.create_text(
-                300, posicion_y_estado,  # Ajusta las coordenadas para la tabla
-                text=estado, fill="black", font=('Arial', 12, 'bold')
-            )
+            # # Crear el nuevo texto para el estado del cliente en la tabla (asegurar que no se solapen)
+            # #posicion_y_estado = 120 + cliente_id * 20  # Ajustar la posición para que no se monten
+            # posicion_y_estado = 120 * 20  # Ajustar la posición para que no se monten
+            # self.textos_celdas[f"estado_{cliente_id}"] = self.canvas.create_text(
+            #     300, posicion_y_estado,  # Ajusta las coordenadas para la tabla
+            #     text=estado, fill="black", font=('Arial', 12, 'bold')
+            #)
+        self.actualizar_tabla_cliente()
+
+    def actualizar_tabla_cliente(self):
+        # Limpiar la tabla de cliente antes de actualizar
+        for widget in self.tabla_frame.grid_slaves():
+            if int(widget.grid_info()["row"]) > 1 :  # Mantener los títulos (fila 1)
+                widget.grid_forget()  # Eliminar el widget de la tabla
+        
+        # Mostrar los taxis en la tabla
+        for idx, (cliente_id, info) in enumerate(self.clientes.items(), start=2):
+            tk.Label(self.tabla_frame, text=str(cliente_id)).grid(row=idx, column=3)
+            tk.Label(self.tabla_frame, text="sin destino").grid(row=idx, column=4)
+            tk.Label(self.tabla_frame, text=info["estado"]).grid(row=idx, column=5)
 
     def actualizar_taxis(self):
         for taxi_id, info in self.taxis.items():
@@ -197,17 +215,8 @@ class Dashboard(tk.Tk):
                 self.canvas.delete(self.textos_celdas[f"estado_{taxi_id}"])
                 del self.textos_celdas[f"estado_{taxi_id}"]  # Eliminar del diccionario para evitar referencias
 
-            # Crear el nuevo texto para el estado del taxi en la tabla (asegurar que no se solapen)
-            posicion_y_estado = 120 + taxi_id * 20  # Ajustar la posición para que no se monten
-            self.textos_celdas[f"estado_{taxi_id}"] = self.canvas.create_text(
-                300, posicion_y_estado,  # Ajusta las coordenadas para la tabla
-                text=estado, fill="black", font=('Arial', 12, 'bold')
-            )
-
             # Actualizar la última posición del taxi
             self.ultima_posicion_taxis[taxi_id] = (fila, columna)
-
-
 
     def actualizar_tabla_taxis(self):
         # Limpiar la tabla de taxis antes de actualizar
@@ -235,7 +244,7 @@ class Dashboard(tk.Tk):
 
                         # Actualizar el diccionario de taxis
                         self.taxis[int(taxi_id)] = {"posicion": [x, y], "estado": estado}
-                        print(f"[Dashboard] Taxi {taxi_id} - Posición: [{x}, {y}], Estado: {estado}")
+                        #print(f"[Dashboard] Taxi {taxi_id} - Posición: [{x}, {y}], Estado: {estado}")
                         
                     except ValueError:
                         print(f"[Dashboard Error] al leer la línea: {linea.strip()}")  # Manejar líneas mal formateadas
@@ -251,7 +260,7 @@ class Dashboard(tk.Tk):
     def actualizar_mapa_periodicamente(self):
         self.actualizar_mapa()
         #print("Mapa actualizado")
-        self.after(3000, self.actualizar_mapa_periodicamente)  # Actualizar cada 3 segundos
+        self.after(2000, self.actualizar_mapa_periodicamente)  # Actualizar cada 3 segundos
 
             
 if __name__ == "__main__":
