@@ -53,9 +53,11 @@ class Customer ():
 
     def recibir_respuesta(self):
         print("Esperando respuesta de Central...")
+        finalizdo = False
         for message in self.consumer:
             mensaje = message.value.decode('utf-8')
-            print(f"mensajes recibidos {mensaje}")
+            if LIMPIAR:
+                print(f"[LIMPIANDO] Mensajes recibidos {mensaje}")
             cliente_ID, respuesta = mensaje.split(";")
             if cliente_ID == self.ID and not LIMPIAR:
                 print(f"Respuesta de la central para el cliente '{self.ID}': {respuesta}")
@@ -64,12 +66,15 @@ class Customer ():
                     print(f"Servicio aceptado.") #Esperamos a que se complete.
                 elif respuesta == "KO":
                     print(f"Servicio anulado.")                
-                    break   #Salimos para pedir otro servicio.
+                    finalizdo = True   #Salimos para pedir otro servicio.
                 elif respuesta == "FIN":
                     print(f"Servicio completado.")
-                    break  #Salimos para pedir otro servicio.
-            else:
-                print(f"{self.ID}:No es para mi lo obvio")
+                    finalizdo = True  #Salimos para pedir otro servicio.
+            #else:
+            #    print(f"{self.ID}:No es para mi lo obvio")        
+            self.consumer.commit()
+            if finalizdo:
+                break
 
 ########## MAIN ##########
 
