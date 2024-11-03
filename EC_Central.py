@@ -19,6 +19,8 @@ FIN = "FIN"
 #FICHERO_TAXIS = "taxis_disponibles.txt"
 #FICHERO_MAPA = "mapa_ciudad.txt"
 DB_TAXIS = "taxis_db.txt"  # Fichero que actuará como base de datos
+DB_CUSTOMERS = "customer_db.txt"  # Fichero que actuará como base de datos para customer
+
 MAX_TAXIS = configuracion.LicenciasTaxis()
 
 MAPA_FILAS = 20
@@ -44,6 +46,10 @@ def inicializar_fichero():
     if not os.path.exists(DB_TAXIS):
         with open(DB_TAXIS, "w") as file:
             file.write("TaxiID;Posicion;Estado\n")  # Cabecera del fichero
+
+    if not os.path.exists(DB_CUSTOMERS):
+        with open(DB_CUSTOMERS, "w") as file:
+            file.write("ClienteID;Destino;Estado\n")
 
 # Función para escribir las posiciones y estados de los taxis en el fichero
 def guardar_en_fichero(taxi_id, posicion=None, estado=None):
@@ -73,6 +79,39 @@ def guardar_en_fichero(taxi_id, posicion=None, estado=None):
         file.writelines(lineas)
 
     #print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
+
+
+# Función para guardar datos de clientes en customer_db.txt
+def guardar_en_fichero_customer(cliente_id, destino, estado):
+    lineas = []
+    cliente_encontrado = False
+
+    # Intentar leer el archivo o crearlo si no existe
+    try:
+        with open(DB_CUSTOMERS, "r") as file:
+            lineas = file.readlines()
+    except FileNotFoundError:
+        with open(DB_CUSTOMERS, "w") as file:
+            file.write("ClienteID;Destino;Estado\n")
+        lineas = ["ClienteID;Destino;Estado\n"]
+
+    # Buscar el cliente en el archivo para actualizar su información
+    for idx, linea in enumerate(lineas):
+        if linea.startswith(f"{cliente_id};"):
+            cliente_encontrado = True
+            lineas[idx] = f"{cliente_id};{destino};{estado}\n"
+            break
+
+    # Si el cliente no se encuentra, añadir una nueva entrada
+    if not cliente_encontrado:
+        lineas.append(f"{cliente_id};{destino};{estado}\n")
+
+    # Escribir los datos actualizados en el archivo
+    with open(DB_CUSTOMERS, "w") as file:
+        file.writelines(lineas)
+
+    #print(f"Datos guardados en {DB_CUSTOMERS}: Cliente {cliente_id} - Destino {destino} - Estado {estado}")
+
 
 
 # Función para cargar los taxis disponibles desde el fichero
@@ -296,9 +335,11 @@ def consumir_solicitudes_clientes():
             taxi_id_disponible = taxis_disponibles.pop() # Obtener taxi y marcar como no disponible
             iniciar_ubicacion_cliente(cliente_id, dashboard)
             enviar_respuesta_cliente(cliente_id, "OK")  # Enviar OK servicio aceptado.    
+            guardar_en_fichero_customer(cliente_id, destino, "OK")
             asignar_taxi(taxi_id_disponible, destino, cliente_id)                         
         else:
             enviar_respuesta_cliente(cliente_id, "KO")  # Enviar KO si no hay taxis
+            guardar_en_fichero_customer(cliente_id, destino, "OK")
             print("No hay taxis disponibles en este momento")                  
 
 # Función para asignar un taxi a una solicitud
