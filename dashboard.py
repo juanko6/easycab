@@ -4,6 +4,7 @@ import random
 import json
 
 DB_TAXIS = "taxis_db.txt"
+DB_CUSTOMERS = "customer_db.txt"
 # Dimensiones del tablero y el mapa (20x20)
 MAPA_FILAS = 20
 MAPA_COLUMNAS = 20
@@ -118,48 +119,58 @@ class Dashboard(tk.Tk):
 
     def actualizar_clientes(self):
         for cliente_id, info in self.clientes.items():
-            fila, columna = info["posicion"]
-            estado = info["estado"]
+            if "posicion" in info and len(info["posicion"]) == 2:
+                fila, columna = info["posicion"]
+                estado = info["estado"]
 
-            # Limpiar la celda anterior del taxi (si existe)
-            if cliente_id in self.ultima_posicion_cliente:
-                fila_anterior, columna_anterior = self.ultima_posicion_cliente[cliente_id]
-                # Restaurar la celda anterior (si era un destino, se restaura con la letra)
-                if (fila_anterior, columna_anterior) in self.destinos:
-                    self.canvas.itemconfig(self.mapa[fila_anterior][columna_anterior], fill="blue")
-                    self.canvas.delete(self.textos_celdas.get((fila_anterior, columna_anterior)))
-                    self.textos_celdas[(fila_anterior, columna_anterior)] = self.canvas.create_text(
-                        columna_anterior * TAMANO_CELDA + TAMANO_CELDA // 2,
-                        fila_anterior * TAMANO_CELDA + TAMANO_CELDA // 2,
-                        text=self.destinos[(fila_anterior, columna_anterior)], fill="white", font=('Arial', 12, 'bold')
-                    )
-                else:
-                    self.canvas.itemconfig(self.mapa[fila_anterior][columna_anterior], fill="white")
-                    self.canvas.delete(self.textos_celdas.get((fila_anterior, columna_anterior)))
+                # Limpiar la celda anterior del cliente (si existe)
+                if cliente_id in self.ultima_posicion_cliente:
+                    fila_anterior, columna_anterior = self.ultima_posicion_cliente[cliente_id]
+                    # Restaurar la celda anterior
+                    if (fila_anterior, columna_anterior) in self.destinos:
+                        self.canvas.itemconfig(self.mapa[fila_anterior][columna_anterior], fill="blue")
+                        self.canvas.delete(self.textos_celdas.get((fila_anterior, columna_anterior)))
+                        self.textos_celdas[(fila_anterior, columna_anterior)] = self.canvas.create_text(
+                            columna_anterior * TAMANO_CELDA + TAMANO_CELDA // 2,
+                            fila_anterior * TAMANO_CELDA + TAMANO_CELDA // 2,
+                            text=self.destinos[(fila_anterior, columna_anterior)], fill="white", font=('Arial', 12, 'bold')
+                        )
+                    else:
+                        self.canvas.itemconfig(self.mapa[fila_anterior][columna_anterior], fill="white")
+                        self.canvas.delete(self.textos_celdas.get((fila_anterior, columna_anterior)))
 
-            self.canvas.itemconfig(self.mapa[fila][columna], fill="yellow")
+                # Actualizar la celda actual con el cliente
+                self.canvas.itemconfig(self.mapa[fila][columna], fill="yellow")
 
-            if (fila, columna) in self.textos_celdas:
-                self.canvas.delete(self.textos_celdas[(fila, columna)])  # Borrar el texto anterior en esa celda
-            self.textos_celdas[(fila, columna)] = self.canvas.create_text(
-                columna * TAMANO_CELDA + TAMANO_CELDA // 2,
-                fila * TAMANO_CELDA + TAMANO_CELDA // 2,
-                text=str(cliente_id), fill="black", font=('Arial', 12, 'bold')
-            )
+                if (fila, columna) in self.textos_celdas:
+                    self.canvas.delete(self.textos_celdas[(fila, columna)])  # Borrar el texto anterior en esa celda
+                self.textos_celdas[(fila, columna)] = self.canvas.create_text(
+                    columna * TAMANO_CELDA + TAMANO_CELDA // 2,
+                    fila * TAMANO_CELDA + TAMANO_CELDA // 2,
+                    text=str(cliente_id), fill="black", font=('Arial', 12, 'bold')
+                )
 
-            # # Actualizar el estado en la tabla de clientes (fuera del mapa)
-            # if f"estado_{cliente_id}" in self.textos_celdas:
-            #     self.canvas.delete(self.textos_celdas[f"estado_{cliente_id}"])
-            #     del self.textos_celdas[f"estado_{cliente_id}"]  # Eliminar del diccionario para evitar referencias
+                self.ultima_posicion_cliente[cliente_id] = (fila, columna)
+            else:
+                print(f"Cliente {cliente_id} tiene una posición inválida: {info.get('posicion')}")
 
-            # # Crear el nuevo texto para el estado del cliente en la tabla (asegurar que no se solapen)
-            # #posicion_y_estado = 120 + cliente_id * 20  # Ajustar la posición para que no se monten
-            # posicion_y_estado = 120 * 20  # Ajustar la posición para que no se monten
-            # self.textos_celdas[f"estado_{cliente_id}"] = self.canvas.create_text(
-            #     300, posicion_y_estado,  # Ajusta las coordenadas para la tabla
-            #     text=estado, fill="black", font=('Arial', 12, 'bold')
-            #)
-        self.actualizar_tabla_cliente()
+    def actualizar_tabla_clientes(self):
+        # Limpiar la tabla de clientes antes de actualizar
+        for widget in self.tabla_frame.grid_slaves():
+            if int(widget.grid_info()["row"]) > 1 and int(widget.grid_info()["column"]) >= 3:  # Mantener los títulos
+                widget.grid_forget()
+
+        # Mostrar los clientes en la tabla
+        for idx, (cliente_id, info) in enumerate(self.clientes.items(), start=2):
+            # Asegurar que "destino" y "estado" existen
+            destino = info.get("destino", "sin destino")
+            estado = info.get("estado", "desconocido")
+            
+            tk.Label(self.tabla_frame, text=str(cliente_id)).grid(row=idx, column=3)
+            tk.Label(self.tabla_frame, text=destino).grid(row=idx, column=4)
+            tk.Label(self.tabla_frame, text=estado).grid(row=idx, column=5)
+
+
 
     def actualizar_tabla_cliente(self):
         # Limpiar la tabla de cliente antes de actualizar
@@ -252,10 +263,27 @@ class Dashboard(tk.Tk):
             print("No se encontró el fichero de taxis.")
 
 
+    def leer_fichero_customers(self):
+        try:
+            with open(DB_CUSTOMERS, "r") as file:
+                lineas = file.readlines()[1:]  # Omitir la cabecera
+                for linea in lineas:
+                    try:
+                        cliente_id, destino, estado = linea.strip().split(";")
+                        # Actualizar el diccionario de clientes
+                        self.clientes[cliente_id] = {"destino": destino, "estado": estado}
+                    except ValueError:
+                        print(f"[Dashboard Error] al leer la línea: {linea.strip()}")  # Manejar líneas mal formateadas
+        except FileNotFoundError:
+            print("No se encontró el fichero de clientes.")
+
+
     def actualizar_mapa(self):
         self.leer_fichero_taxis()  # Leer las posiciones actualizadas
         self.actualizar_taxis()  # Actualizar el mapa con las nuevas posiciones
+        self.leer_fichero_customers()
         self.actualizar_tabla_taxis()  # Actualizar la tabla de taxis
+        self.actualizar_tabla_clientes()
 
     def actualizar_mapa_periodicamente(self):
         self.actualizar_mapa()

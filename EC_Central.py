@@ -19,10 +19,15 @@ FIN = "FIN"
 #FICHERO_TAXIS = "taxis_disponibles.txt"
 #FICHERO_MAPA = "mapa_ciudad.txt"
 DB_TAXIS = "taxis_db.txt"  # Fichero que actuará como base de datos
+DB_CUSTOMERS = "customer_db.txt"  # Fichero que actuará como base de datos para customer
+
 MAX_TAXIS = configuracion.LicenciasTaxis()
 
 MAPA_FILAS = 20
 MAPA_COLUMNAS = 20
+
+servicios_en_curso = {}  # Para trackear servicios activos
+consumer_servicios = None  # Consumer global para servicios
 
 # Lista de taxis disponibles y taxis autenticados
 taxis_autenticados = set()
@@ -41,6 +46,10 @@ def inicializar_fichero():
     if not os.path.exists(DB_TAXIS):
         with open(DB_TAXIS, "w") as file:
             file.write("TaxiID;Posicion;Estado\n")  # Cabecera del fichero
+
+    if not os.path.exists(DB_CUSTOMERS):
+        with open(DB_CUSTOMERS, "w") as file:
+            file.write("ClienteID;Destino;Estado\n")
 
 # Función para escribir las posiciones y estados de los taxis en el fichero
 def guardar_en_fichero(taxi_id, posicion=None, estado=None):
@@ -70,6 +79,39 @@ def guardar_en_fichero(taxi_id, posicion=None, estado=None):
         file.writelines(lineas)
 
     #print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
+
+
+# Función para guardar datos de clientes en customer_db.txt
+def guardar_en_fichero_customer(cliente_id, destino, estado):
+    lineas = []
+    cliente_encontrado = False
+
+    # Intentar leer el archivo o crearlo si no existe
+    try:
+        with open(DB_CUSTOMERS, "r") as file:
+            lineas = file.readlines()
+    except FileNotFoundError:
+        with open(DB_CUSTOMERS, "w") as file:
+            file.write("ClienteID;Destino;Estado\n")
+        lineas = ["ClienteID;Destino;Estado\n"]
+
+    # Buscar el cliente en el archivo para actualizar su información
+    for idx, linea in enumerate(lineas):
+        if linea.startswith(f"{cliente_id};"):
+            cliente_encontrado = True
+            lineas[idx] = f"{cliente_id};{destino};{estado}\n"
+            break
+
+    # Si el cliente no se encuentra, añadir una nueva entrada
+    if not cliente_encontrado:
+        lineas.append(f"{cliente_id};{destino};{estado}\n")
+
+    # Escribir los datos actualizados en el archivo
+    with open(DB_CUSTOMERS, "w") as file:
+        file.writelines(lineas)
+
+    #print(f"Datos guardados en {DB_CUSTOMERS}: Cliente {cliente_id} - Destino {destino} - Estado {estado}")
+
 
 
 # Función para cargar los taxis disponibles desde el fichero
@@ -254,6 +296,28 @@ def iniciar_ubicacion_cliente(id, dashboard):
 
     dashboard.actualizar_clientes()
 
+def inicializar_consumer_servicios():
+    #Inicializa el consumidor global para servicios de taxis
+    global consumer_servicios
+    consumer_servicios = KafkaConsumer(
+        bootstrap_servers=BOOTSTRAP_SERVER,
+        auto_offset_reset='latest',
+        enable_auto_commit=True,
+        group_id="group_Servicios_Global"
+    )
+
+def subscribir_a_servicio_taxi(taxi_id):
+    #Suscribe el consumidor global a un nuevo topic de servicio de taxi
+    topic = f"ST_{taxi_id}"    
+    print(f"Subsicrito a : {consumer_servicios.subscription()}")
+    if(consumer_servicios.subscription()):
+        current_topics = set(consumer_servicios.subscription())
+    else:
+        current_topics = set()
+    current_topics.add(topic)
+    consumer_servicios.subscribe(current_topics)
+    print(f"Suscrito a topic de servicio: {topic}")
+
 # Función para gestionar solicitudes de clientes desde el fichero
 def consumir_solicitudes_clientes():         
     print("***Inicio hilo cliente***")       
@@ -271,9 +335,11 @@ def consumir_solicitudes_clientes():
             taxi_id_disponible = taxis_disponibles.pop() # Obtener taxi y marcar como no disponible
             iniciar_ubicacion_cliente(cliente_id, dashboard)
             enviar_respuesta_cliente(cliente_id, "OK")  # Enviar OK servicio aceptado.    
+            guardar_en_fichero_customer(cliente_id, destino, "OK")
             asignar_taxi(taxi_id_disponible, destino, cliente_id)                         
         else:
             enviar_respuesta_cliente(cliente_id, "KO")  # Enviar KO si no hay taxis
+            guardar_en_fichero_customer(cliente_id, destino, "OK")
             print("No hay taxis disponibles en este momento")                  
 
 # Función para asignar un taxi a una solicitud
@@ -287,40 +353,57 @@ def asignar_taxi(taxi_id, destino, cliente_id):
     columna, fila = ubicacion_Cliente
     dashboard.refrescar_cliente(cliente_id, columna, fila, "OK. Sin Taxi") 
 
+    # Registrar el servicio en curso
+    servicios_en_curso[taxi_id] = {
+        'cliente_id': cliente_id,
+        'origen': ubicacion_Cliente,
+        'destino': destino,
+        'pos_destino': posDetino
+    }
+
+    subscribir_a_servicio_taxi(taxi_id)
+
         #2 - Enviar TAXI a por CLIENTE.
     servicio = f"{ubicacion_Cliente};{posDetino}"
-    print(f"Servicio para {topic_taxi}: {servicio}")
     producer.send(topic_taxi, value=servicio.encode('utf-8'))
     producer.flush()
+    print(f"Servicio para {topic_taxi}: {servicio}")
 
     #3 - Esperar a que el TAXI informe estado del servicio
 #    thread = threading.Thread(target=eseprar_servicio_taxi, args=(taxi_id, cliente_id, posDetino, destino))
 #    thread.start()  
 
 #def eseprar_servicio_taxi(taxi_id, cliente_id, posDetino, destino):
-    consumidor = KafkaConsumer(f"ST_{taxi_id}", 
-                               bootstrap_servers=BOOTSTRAP_SERVER, 
-                                      auto_offset_reset='latest',
-                                      enable_auto_commit=True,
-                                      group_id=f"group_Servicios")
-
-    print("Esperando respuesta TAXI")
-    for mensaje in consumidor:
-        contenido = int(mensaje.value.decode('utf-8'))
-        consumidor.commit()
-        print(f"[SERVICIO] Respuesta TAXI: {contenido}")
-        if contenido == 1: #taxi recoge al cliente
-            dashboard.refrescar_cliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}")
-            print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}")
-        
-        elif contenido == 2: #taxi confirma llegada al destino
-            print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}")
-            taxis_disponibles.add(taxi_id)
-            clientes[cliente_id] = posDetino
-            columna, fila = posDetino
-            dashboard.refrescar_cliente(cliente_id, columna, fila, "FIN")
-            enviar_respuesta_cliente(cliente_id, "FIN")
-            break
+def procesar_mensajes_servicios():
+    #Procesa los mensajes de servicios de todos los taxis en curso
+    print("***Inicio hilo procesar servicios***")
+    while True:
+        mensaje = consumer_servicios.poll(timeout_ms=1000)
+        for topic_partition, mensajes in mensaje.items():
+            for msg in mensajes:
+                topic = topic_partition.topic
+                taxi_id = int(topic.split('_')[1])
+                if taxi_id in servicios_en_curso:
+                    contenido = int(msg.value.decode('utf-8'))
+                    servicio = servicios_en_curso[taxi_id]
+                    
+                    if contenido == 1:  # taxi recoge al cliente
+                        cliente_id = servicio['cliente_id']
+                        columna, fila = servicio['origen']
+                        dashboard.refrescar_cliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}")
+                        print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}")
+                    
+                    elif contenido == 2:  # taxi confirma llegada al destino
+                        cliente_id = servicio['cliente_id']
+                        destino = servicio['destino']
+                        pos_destino = servicio['pos_destino']
+                        print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}")
+                        taxis_disponibles.add(taxi_id)
+                        clientes[cliente_id] = pos_destino
+                        columna, fila = pos_destino
+                        dashboard.refrescar_cliente(cliente_id, columna, fila, "FIN")
+                        enviar_respuesta_cliente(cliente_id, "FIN")
+                        del servicios_en_curso[taxi_id]  # Eliminar el servicio completado
 
 # Función para enviar la respuesta al cliente
 def enviar_respuesta_cliente(cliente_id, respuesta):
@@ -359,7 +442,9 @@ if __name__ == "__main__":
     inicializar_fichero()
     # Cargar los taxis disponibles al iniciar la central
     cargar_taxis_disponibles()
-    #iniciar_ubicacion_cliente('a', dashboard)
+
+    # Inicializar el consumidor global de servicios
+    inicializar_consumer_servicios()
 
     # Iniciar el servidor de autenticación por socket en un hilo separado
     hilo_servidor = threading.Thread(target=iniciar_autenticacion_taxis, args=(IP_CENTRAL, PORT_CENTRAL))
@@ -371,6 +456,11 @@ if __name__ == "__main__":
     hilo_consumir_posiciones.daemon = True
     hilo_consumir_posiciones.start()
     
+    # Iniciar hilo para procesar mensajes de servicios
+    hilo_procesar_servicios = threading.Thread(target=procesar_mensajes_servicios)
+    hilo_procesar_servicios.daemon = True
+    hilo_procesar_servicios.start()
+
     # Hilo para peticiones clientes
     hilo_consumir_posiciones = threading.Thread(target=consumir_solicitudes_clientes)
     hilo_consumir_posiciones.daemon = True
