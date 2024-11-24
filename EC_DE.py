@@ -26,10 +26,6 @@ class EC_DE:
         print("Iniciando productor Kafka")
         self.producer = KafkaProducer(bootstrap_servers=bootstrap)
         
-        # Crear Kafka Consumer para recibir servicios
-        print("Iniciando consumidor Kafka")
-        self.consumerServices = KafkaConsumer(self.topic, bootstrap_servers=bootstrap, auto_offset_reset='latest')
-
         self.running = True  # Variable para controlar el ciclo de ejecución
         
 
@@ -65,40 +61,78 @@ class EC_DE:
 
         return result
 
-    def aceptar_servicios(self):
-        for message in self.consumerServices:
-            mensaje = message.value.decode('utf-8')
-            print(f"mensajes recibidos {mensaje}")            
-            posCliente, posDestino = mensaje.split(";")
+    def escuchar_asignaciones(self):
+        """Escuchar asignaciones de servicios y procesarlas"""
+        consumer = KafkaConsumer(
+            f"TAXI_{self.ID}",
+            bootstrap_servers=BOOTSTRAP_SERVER,
+            auto_offset_reset='earliest',
+            enable_auto_commit=True,
+            group_id=f'group_{self.ID}'
+        )
+        print(f"[EC_DE] Taxi {self.ID} escuchando asignaciones en topic TAXI_{self.ID}")
 
+        for mensaje in consumer:
+            servicio = mensaje.value.decode('utf-8')
+            if ";" in servicio:
+                ubicacion_cliente, destino = servicio.split(';')
+                print(f"[EC_DE] Taxi {self.ID} recibió servicio: Ubicación Cliente {ubicacion_cliente}, Destino {destino}")
+                self.recibir_servicio(ubicacion_cliente, destino)
 
-    def mover_taxi(self):
-        direcciones = ["norte", "sur", "este", "oeste"]
+    def recibir_servicio(self, ubicacion_cliente, destino):
+        """Mover el taxi hacia la ubicación del cliente y luego al destino"""
+        # Extraer coordenadas del cliente y destino
+        ubicacion_cliente_x, ubicacion_cliente_y = map(int, ubicacion_cliente.strip('()').split(','))
+        destino_x, destino_y = map(int, destino.strip('()').split(','))
 
-        while self.running:  # Mantener el bucle en ejecución constante
-            # Verificar el estado actual y mover el taxi solo si está "Disponible"
-            if self.estado == "Disponible":
-                direccion = random.choice(direcciones)
-                if direccion == "norte":
-                    self.posicion[0] = (self.posicion[0] - 1) % MAPA_DIM
-                elif direccion == "sur":
-                    self.posicion[0] = (self.posicion[0] + 1) % MAPA_DIM
-                elif direccion == "este":
-                    self.posicion[1] = (self.posicion[1] + 1) % MAPA_DIM
-                elif direccion == "oeste":
-                    self.posicion[1] = (self.posicion[1] - 1) % MAPA_DIM
+        self.estado = "en camino"
+        # Mover hacia el cliente
+        self.mover_hacia(ubicacion_cliente_x, ubicacion_cliente_y)
+        print("[Servicion] enviar Parte 1")
+        time.sleep(1)
+        self.enviar_estado_servicio("1") #1=Llegada al cliente
 
-                print(f"Moviendo taxi {self.ID} en dirección {direccion}, nueva posición: {self.posicion}")
-                enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
+        self.estado = "en servicio"
+        # Cambiar el estado a "en servicio" y moverse al destino
+        self.mover_hacia(destino_x, destino_y)
+        print("[Servicio] enviar Parte 2")
+        self.enviar_estado_servicio("2") #2=Finalizado
 
-            elif self.estado == "KO":
-                print(f"Taxi {self.ID} detenido. Estado actual: {self.estado}")
-                enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
+        # Finalizar el servicio
+        self.estado = "Disponible"
+        print(f"[EC_DE] Servicio finalizado. Taxi {self.ID} ahora está disponible.")
 
-            time.sleep(5 if self.estado == "Disponible" else 1)
+    def mover_hacia(self, dest_x, dest_y):
+        #Mover el taxi paso a paso hacia una posición objetivo.
+        print(f"[EC_DE] Taxi {self.ID} en estado: {self.estado}. Moviéndose hacia ({dest_x}, {dest_y})")
 
+        while self.posicion != [dest_x, dest_y]:
+            if self.estado == "en camino" or self.estado == "en servicio":     #Solo mover si se ha activado.
+                # Movimiento en el eje X
+                if self.posicion[0] < dest_x:
+                    self.posicion[0] += 1
+                elif self.posicion[0] > dest_x:
+                    self.posicion[0] -= 1
 
+                time.sleep(1)
 
+                # Movimiento en el eje Y
+                if self.posicion[1] < dest_y:
+                    self.posicion[1] += 1
+                elif self.posicion[1] > dest_y:
+                    self.posicion[1] -= 1
+
+                time.sleep(1)
+
+        print(f"[EC_DE] Taxi {self.ID} ha llegado a la posición ({dest_x}, {dest_y})")
+
+    def enviar_estado_servicio(self, mensaje):
+        #Enviar la posición y el estado actual a Kafka.
+        self.producer.send(f"ST_{self.ID}", value=mensaje.encode('utf-8'))
+        self.producer.flush()
+        print(f'Enviando SERVICIO: {mensaje}')
+
+    
     # Función que actualiza el estado del taxi basado en el sensor
     def actualizar_estado(self):
         while self.running:
@@ -106,10 +140,14 @@ class EC_DE:
                 self.estado = "esperandoconexion"
                 print(f"Taxi {self.ID} en espera de conexión con el sensor.")
             else:
-                estado_sensor = leer_estado_sensor()
+                estado_sensor = leer_estado_sensor(self.ID)
+                print(f"Taxi {self.ID} sensor conectado con estado {estado_sensor}.")
                 if estado_sensor == "OK":
-                    self.estado = "Disponible"
-                else:
+                # Solo cambiar a "Disponible" si no está en movimiento o en servicio
+                    if self.estado not in ["en camino", "en servicio"]:
+                        self.estado = "Disponible"
+                elif estado_sensor != "OK":
+                # Cambiar a "KO" solo si el sensor indica un problema
                     self.estado = "KO"
                     
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
@@ -120,10 +158,6 @@ class EC_DE:
     def detener(self):
         print("\n[EC_DE] Apagando el taxi...")
         self.running = False
-
-
-
-
 
 def calcular_lrc(estado):
     lrc = 0
@@ -148,11 +182,11 @@ def verificar_lrc(estado, lrc_recibido):
 
 # Función para manejar la recepción de mensajes del sensor
 def manejar_sensor(conn_sensor):
+    estadoAnterior = "Disponible"
     while True:
         try:
             # Recibir estado del sensor
             estado_sensor = conn_sensor.recv(4096).decode(FORMAT)
-            
             if not estado_sensor:
                 print("Sensor desconectado.")
                 taxi.estado = "esperandoconexion"
@@ -182,8 +216,11 @@ def manejar_sensor(conn_sensor):
 
                 # Cambiar el estado del taxi en función del mensaje recibido
                 if data == "OK":
-                    taxi.estado = "Disponible"
+                    print(estadoAnterior)
+                    taxi.estado = estadoAnterior
                 else:
+                    if taxi.estado == "Disponible" or taxi.estado == "en camino" or taxi.estado ==  "en servicio":
+                        estadoAnterior = taxi.estado
                     taxi.estado = "KO"
                     print(f"Incidencia detectada: {data}")
 
@@ -193,7 +230,8 @@ def manejar_sensor(conn_sensor):
 
                 
                 # Guardar el estado en un fichero
-                with open("estado_sensor.txt", "w") as file:
+                fichero_estado = f"estado_sensor_taxi_{taxi.ID}.txt"
+                with open(fichero_estado, "w") as file:
                     file.write(f"{data}\n")
             else:
                 print("Error: LRC no coincide. El mensaje está corrupto.")
@@ -229,16 +267,21 @@ def manejar_sensor(conn_sensor):
 def enviar_posicion_estado_kafka(taxi_id, posicion, estado, producer, topic):
     mensaje = f"Taxi {taxi_id}: Posicion {posicion}, Estado {estado}"
     producer.send(topic, value=mensaje.encode('utf-8'))
-    print(f"Enviando posición y estado del taxi: {mensaje}")
+    #print(f"Enviando posición y estado del taxi: {mensaje}")
     producer.flush()  # Asegura que el mensaje se envía inmediatamente
 
-# Función para leer el estado del sensor desde el archivo
-def leer_estado_sensor():
+# Función para leer el estado del sensor desde el archivo identificado por el ID del taxi
+def leer_estado_sensor(taxi_id):
+    fichero_estado = f"estado_sensor_taxi_{taxi_id}.txt"
     try:
-        with open("estado_sensor.txt", "r") as file:
-            return file.read().strip()
+        with open(fichero_estado, "r") as file:
+            return file.read().strip()  # Leer y devolver el estado sin espacios en blanco
     except FileNotFoundError:
-        return "OK"
+        return "OK"  # Si no existe el archivo, retornar "OK" por defecto
+    except Exception as e:
+        print(f"Error al leer el estado del sensor para Taxi {taxi_id}: {e}")
+        return "OK"  # Manejar otros errores devolviendo "OK" por defecto
+
 
 # Función para enviar mensajes al servidor central
 def send(client, msg):
@@ -313,12 +356,8 @@ if len(sys.argv) == 6:
         signal.signal(signal.SIGINT, signal_handler)
 
         # Iniciar la actualización del estado del taxi
-        hilo_estado = threading.Thread(target=taxi.actualizar_estado)
+        hilo_estado = threading.Thread(target=taxi.actualizar_estado, daemon=True)
         hilo_estado.start()
-
-        # Iniciar el movimiento del taxi
-        hilo_movimiento = threading.Thread(target=taxi.mover_taxi)
-        hilo_movimiento.start()
 
         print(f"Esperando conexion del sensor en {SENSOR_IP}:{SENSOR_PORT}...")
         # Iniciar el servidor para recibir estados de los sensores en un hilo separado
@@ -327,9 +366,13 @@ if len(sys.argv) == 6:
         server_socket.listen(1)
 
         # Crear el hilo para aceptar conexiones
-        hilo_sensor = threading.Thread(target=aceptar_conexiones_S, args=(server_socket,))
+        hilo_sensor = threading.Thread(target=aceptar_conexiones_S, args=(server_socket,), daemon=True)
         hilo_sensor.daemon = True
         hilo_sensor.start()
+
+        # Crear hilo para escuchar asignaciones de servicio de la central
+        hilo_escuchar_asignaciones = threading.Thread(target=taxi.escuchar_asignaciones, daemon=True)
+        hilo_escuchar_asignaciones.start()
 
         # Mantener el proceso activo
         while True:

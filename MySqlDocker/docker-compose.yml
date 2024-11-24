@@ -1,0 +1,21 @@
+version: '2.27.1'  # Versión de Compose
+
+services:  # Definición de los servicios (contenedores)
+  mysql:
+    image: mysql:9.1.0  # Usar la imagen oficial de MySQL
+    container_name: mysqldocker
+    environment:
+      MYSQL_ROOT_PASSWORD: 1234  # Configuración de la base de datos
+      MYSQL_DATABASE: EasyCabDB  # Crear una base de datos inicial
+    volumes:
+      - ./sql-scripts:/docker-entrypoint-initdb.d  # Monta todo el directorio y ejecuta los scpript en orden alafabetico.
+#      - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # Montar el script de inicialización en el contenedor
+#      - mysql-data:/var/lib/mysql  # Volumen persistente para MySQL
+
+    ports:
+      - "3306:3306"  # Mapeo de puertos
+    
+    restart: always  # Opcional: Asegura que el contenedor se reinicie siempre que se detenga
+
+#volumes:
+#  mysql-data:  # Volumen persistente de Docker para la base de datos MySQL (mysql-data puede ser una ruta local si queremos gestionar la ubicacion)
