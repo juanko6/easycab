@@ -47,9 +47,9 @@ class EC_DE:
             if result == 1:
                 print("Taxi autenticado correctamente.")
             elif result == 2:
-                print("Taxi con ID ya estaba registrado.")
+                print("Taxi con ID ya está autenticado.")
             elif result == -1:
-                print("ID fuera de rango. Solo permitido [0..99].")
+                print("ID de Taxi no registrado.")
             elif result == -3:
                 print("Mensaje de autenticación incorrecto.")
             else:

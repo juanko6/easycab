@@ -17,8 +17,6 @@ REFRESH_INTERVAL = 2  # Intervalo en segundos para verificar nuevos topics
 HEADER = 64
 FORMAT = 'utf-8'
 FIN = "FIN"
-#FICHERO_TAXIS = "taxis_disponibles.txt"
-#FICHERO_MAPA = "mapa_ciudad.txt"
 DB_TAXIS = "taxis_db.txt"  # Fichero que actuará como base de datos
 DB_CUSTOMERS = "customer_db.txt"  # Fichero que actuará como base de datos para customer
 
@@ -41,18 +39,7 @@ clientes = {}
 #####
 ########## PERSITENCIA DATOS ##########
 #####
-
-# Función para inicializar el fichero (si es necesario)
-def inicializar_fichero():
-    if not os.path.exists(DB_TAXIS):
-        with open(DB_TAXIS, "w") as file:
-            file.write("TaxiID;Posicion;Estado\n")  # Cabecera del fichero
-
-    if not os.path.exists(DB_CUSTOMERS):
-        with open(DB_CUSTOMERS, "w") as file:
-            file.write("ClienteID;Destino;Estado\n")
-
-# Función para escribir las posiciones y estados de los taxis en el fichero
+# Función para guardar las posiciones y estados de los taxis en el fichero
 def guardar_en_fichero(taxi_id, posicion=None, estado=None):
     lineas = []
     taxi_encontrado = False
@@ -81,7 +68,7 @@ def guardar_en_fichero(taxi_id, posicion=None, estado=None):
 
     #print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
 
-# Función para escribir las posiciones y estados de los taxis en el fichero
+# Función para guradar las posiciones y estados de los taxis 
 def guardar_taxi_SQL(taxi_id, posicion, estado, conectado):
     posY, posX  = posicion
     sql.UpdateTAXI(taxi_id, posX, posY, estado, conectado)
@@ -118,7 +105,6 @@ def guardar_en_fichero_customer(cliente_id, destino, estado):
     #print(f"Datos guardados en {DB_CUSTOMERS}: Cliente {cliente_id} - Destino {destino} - Estado {estado}")
 
 
-
 # Función para cargar los taxis disponibles desde el fichero
 def cargar_taxis_disponibles():
     try:
@@ -131,7 +117,7 @@ def cargar_taxis_disponibles():
                 posicion = list(map(int, posicion.strip("[]").split(",")))  # Convertir la posición a lista [y, x]
                 print(f"Ultimo estado guardado: {taxi_id}, {posicion}, {estado}")
                 estado = "esperandoconexion" #Al cargar desde fichero ponemos estado esperando por defecto hasta que recibamos el estado real del taxi.
-                if(autenticar_taxi(int(taxi_id))>0): 
+                if(autenticar_taxiSQL(int(taxi_id))>0): 
                     print(f"Taxi {taxi_id} cargado: Posicion {posicion}, Estado {estado}")
                     if(estado=="Disponible"):              
                         taxis_disponibles.add(int(taxi_id))
@@ -145,6 +131,7 @@ def cargar_taxis_disponibles():
     except FileNotFoundError:
         print(f"El fichero {DB_TAXIS} no se encontró, inicializando vacio.")
 
+#Funcion para iniciar los taxis desde la base de datos.
 def cargar_taxis_SQL():
     result = sql.consulta("SELECT ID_TAXI, POS_X, POS_Y FROM TAXI;")
     print("----------LIST TAXIS REGISTRADOS-------------")
@@ -162,14 +149,14 @@ def cargar_taxis_SQL():
 #####
 
 def nuevo_taxi(conn, addr):
-    print(f"[NUEVA CONEXIÓN] {addr} connected.")
+    print(f"[PETICIÓN AUTENTICACIÓN] {addr} connected.")
     connected = True
     while connected:
         msg_length = conn.recv(HEADER).decode(FORMAT)
         if msg_length:
             msg_length = int(msg_length)
             msg = conn.recv(msg_length).decode(FORMAT)
-            print(f"He recibido del taxi [{addr}] el mensaje: {msg}")
+            print(f"Recibido del taxi [{addr}] el mensaje: {msg}")
 
             # Extraer el ID del taxi del mensaje
             if msg.startswith("Nuevo Taxi"):
@@ -181,16 +168,16 @@ def nuevo_taxi(conn, addr):
                     continue
 
                 # Verificar el ID del taxi
-                result = autenticar_taxi(taxi_id)
+                result = autenticar_taxiSQL(taxi_id)
 
                 if result == 1:
                     print(f"Taxi con ID {taxi_id} autenticado correctamente.")
                     conn.send("1".encode(FORMAT))
                 elif result == 2:
-                    print(f"Taxi con ID {taxi_id} ya registrado.")
+                    print(f"Ya existe un taxi autenticado con ID {taxi_id}.")
                     conn.send("2".encode(FORMAT))
                 elif result == -1:
-                    print(f"ID {taxi_id} fuera de rango.")
+                    print(f"ID {taxi_id} no registrado.")
                     conn.send("-1".encode(FORMAT))
                 else:                    
                     print("Autencación fallida.")
@@ -204,17 +191,17 @@ def nuevo_taxi(conn, addr):
 
     conn.close()
 
-def autenticar_taxi(idTaxi):
-    if 0 <= idTaxi <= MAX_TAXIS:  # Verificar si el ID está en el rango válido
+def autenticar_taxiSQL(idTaxi):
+    if sql.checkTaxiId(idTaxi):
         if idTaxi not in taxis_autenticados:  # Verificar si el ID ya ha sido autenticado
-            taxis_autenticados.add(idTaxi) 
+            taxis_autenticados.add(idTaxi)
             newTopicsTaxis.add(f"TAXI_{idTaxi}")
-
+            
             return 1  # ID autenticado correctamente
         else:
-            return 2  # ID ya registrado
+            return 2  # ID ya autenticado
     else:
-        return -1  # ID fuera de rango
+        return -1 # ID no registrado
 
 # Función para iniciar el servidor de autenticación
 def iniciar_autenticacion_taxis(IP_CENTRAL, PORT_CENTRAL):    
@@ -223,12 +210,11 @@ def iniciar_autenticacion_taxis(IP_CENTRAL, PORT_CENTRAL):
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind(ADDR)
     server.listen()
-    print(f"[AUTENTICACION] Servidor a la escucha en {IP_CENTRAL}:{PORT_CENTRAL}")
+    print(f"[AUTENTICACION] Servidor a la escucha en {ADDR}")
     while True:
         conn, addr = server.accept()
         thread = threading.Thread(target=nuevo_taxi, args=(conn, addr))
         thread.start()
-        print(f"[CONEXIONES ACTIVAS] {threading.active_count() - 1}")
 
 #####
 ########## COMUNICACION TAXIS ##########
@@ -253,7 +239,6 @@ def subscribir_NuevotopicTaxi(consumer, current_topics):
             print(f"Subsicrito a : {consumer.subscription()}")
         time.sleep(REFRESH_INTERVAL)
     
-# Función para consumir los mensajes desde los topics específicos de cada taxi
 # Función para consumir los mensajes desde los topics específicos de cada taxi
 def consumir_posiciones_taxis():
     print("***Inicio hilo consumir taxis***")
@@ -457,11 +442,10 @@ if __name__ == "__main__":
 
     # Iniciar el dashboard en el hilo principal
     dashboard = Dashboard()
-#    # Inicializar el fichero que actuará como base de datos
-#    inicializar_fichero()
+
+#    # Inicializar base de datos
     sql = miSQL.MiSQL()
-    # Cargar los taxis disponibles al iniciar la central
-#    cargar_taxis_disponibles()
+    # Cargar los taxis al iniciar la central
     cargar_taxis_SQL()
 
     # Inicializar el consumidor global de servicios
