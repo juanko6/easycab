@@ -8,6 +8,14 @@ import os
 from dashboard import Dashboard
 import random
 import configuracion
+import subprocess
+import json
+
+URL_EC_CTC = "http://127.0.0.1:5001/traffic"  # Cambia la IP si EC_CTC está en otro servidor
+CIUDAD_SERVICIO = "Alicante"  # Ciudad donde opera el servicio
+
+# Intervalo de consulta a EC_CTC (en segundos)
+INTERVALO_CONSULTA = 10
 
 
 BOOTSTRAP_SERVER = configuracion.Entorno()
@@ -423,14 +431,66 @@ def getPosDestino(destino):
         print(f"No se encontro destino {destino}")
         return (1,1)
     
+
+
+#####
+########## REQUEST CITY TRAFFIC CONTROL ##########
+#####
+class ECCentral:
+    def __init__(self, dashboard):
+        self.estado_trafico = "OK"
+        self.dashboard = dashboard  # Dashboard pasado desde el hilo principal
+
+    def consultar_trafico(self):
+        """Consulta el estado del tráfico en EC_CTC usando curl."""
+        try:
+            url = f"{URL_EC_CTC}?ciudad={CIUDAD_SERVICIO}"
+            result = subprocess.run(
+                ["curl", "-s", url],
+                capture_output=True,
+                text=True
+                
+            )
+
+            if result.returncode != 0:
+                print(f"[ERROR] No se pudo conectar con EC_CTC: {result.stderr}")
+                return
+
+            # Parsear la respuesta JSON
+            datos = json.loads(result.stdout)
+            self.estado_trafico = datos.get("estado_trafico", "KO")
+            print(f"[INFO] Estado del tráfico: {self.estado_trafico}")
+        except Exception as e:
+            print(f"[ERROR] Al consultar EC_CTC: {e}")
+            self.estado_trafico = "KO"
+
+    def verificar_trafico_periodicamente(self):
+        """Consulta el tráfico periódicamente y actualiza el estado en el sistema."""
+        while True:
+            self.consultar_trafico()
+            if self.estado_trafico == "KO":
+                print("[ALERTA] Tráfico no viable. Notificando a los taxis.")
+                # TODO Aquí se invoca la funcion que va a retornar los taxis al origen.
+            time.sleep(INTERVALO_CONSULTA)
+
+def iniciar_ec_central():
+    """Función para inicializar EC_Central en un hilo."""
+    central = ECCentral(dashboard)
+    hilo_trafico = threading.Thread(target=central.verificar_trafico_periodicamente, daemon=True)
+    hilo_trafico.start()
+
+
 #####
 ########## MAIN ##########
 #####
 
 if __name__ == "__main__":
+
     if len(sys.argv) != 3:
         print("Uso: python EC_Central.py <IP_Central> <Puerto_Central>")
         sys.exit(1)
+
+
 
     IP_CENTRAL = sys.argv[1]
     PORT_CENTRAL = int(sys.argv[2])
@@ -467,5 +527,5 @@ if __name__ == "__main__":
     hilo_consumir_posiciones.start()
 
 
-    dashboard.after(1000, actualizar_dashboard, dashboard)
+    threading.Thread(target=iniciar_ec_central, daemon=True).start()
     dashboard.mainloop()
