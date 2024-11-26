@@ -81,10 +81,12 @@ def guardar_en_fichero(taxi_id, posicion=None, estado=None):
 
     #print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
 
+
 # Función para escribir las posiciones y estados de los taxis en el fichero
 def guardar_taxi_SQL(taxi_id, posicion, estado):
     posX, posY = posicion
     sql.UpdateTAXI(taxi_id, posX, posY, estado)
+
 
 # Función para guardar datos de clientes en customer_db.txt
 def guardar_en_fichero_customer(cliente_id, destino, estado):
@@ -272,7 +274,9 @@ def consumir_posiciones_taxis():
                 taxis_disponibles.add(taxi_id)
 
             guardar_en_fichero(taxi_id, posicion, estado)  # Guardar estado en el fichero
+
             guardar_taxi_SQL(taxi_id, posicion, estado)  # Guardar estado en SQL
+
 
 # Función para actualizar el dashboard con nuevos estados
 def actualizar_dashboard(dashboard):
