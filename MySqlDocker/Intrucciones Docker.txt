@@ -1,0 +1,35 @@
+*** Crear y ejecutar el contenedor de MySQL ***
+docker run --name mysqldocker -e MYSQL_ROOT_PASSWORD=1234 -p 3306:3306 -v mysql-data:/var/lib/mysql -d mysql:latest
+
+	docker run: Comando para crear y ejecutar un contenedor.
+	--name mysqldocker: Le da un nombre al contenedor, en este caso mysqldocker.
+	-e MYSQL_ROOT_PASSWORD=1234: Establece la contraseña de root para la base de datos MySQL. En este caso, se establece como 1234.
+	-d: Ejecuta el contenedor en segundo plano (modo detached).
+	mysql:latest: Especifica la imagen de MySQL que usarás. mysql:latest indica que se utilizará la última versión de MySQL disponible.
+	-p 3306:3306: Mapea el puerto de la maquina local con el contenedor (portLocal:portContainer).
+	-v mysql-data:/var/lib/mysql: monta un volumen persistente llamado mysql-data en el directorio /var/lib/mysql dentro del contenedor.
+	
+	
+*** Conectar al contenedor MySQL ***	
+docker exec -it mysqldocker mysql -u root -p
+
+	docker exec -it: Ejecuta un comando dentro de un contenedor en ejecución.
+	mysqldocker: Es el nombre del contenedor que creamos anteriormente.
+	mysql -u root -p: Llama a MySQL con el usuario root y solicita la contraseña.
+	
+	
+***Levantar los contenedores con compose***	
+docker-compose up -d
+
+	-d: para ejecutar en segundo plano
+	
+***Para detener todos los contenedores definidos en tu archivo***	
+**Esto detendrá y eliminará todos los contenedores, redes y volúmenes creados por docker-compose up**
+docker-compose down	
+
+**Si solo quieres detener los contenedores sin eliminarlos**
+docker-compose stop
+
+	*si solo se ha parado se puede levantar de nuevo con docker-compose up o con:*
+	docker-compose start
+

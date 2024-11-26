@@ -8,6 +8,7 @@ import os
 from dashboard import Dashboard
 import random
 import configuracion
+import miSQL
 
 
 BOOTSTRAP_SERVER = configuracion.Entorno()
@@ -79,6 +80,12 @@ def guardar_en_fichero(taxi_id, posicion=None, estado=None):
         file.writelines(lineas)
 
     #print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
+
+
+# Función para escribir las posiciones y estados de los taxis en el fichero
+def guardar_taxi_SQL(taxi_id, posicion, estado):
+    posX, posY = posicion
+    sql.UpdateTAXI(taxi_id, posX, posY, estado)
 
 
 # Función para guardar datos de clientes en customer_db.txt
@@ -268,6 +275,9 @@ def consumir_posiciones_taxis():
 
             guardar_en_fichero(taxi_id, posicion, estado)  # Guardar estado en el fichero
 
+            guardar_taxi_SQL(taxi_id, posicion, estado)  # Guardar estado en SQL
+
+
 # Función para actualizar el dashboard con nuevos estados
 def actualizar_dashboard(dashboard):
     global nuevos_estados
@@ -438,8 +448,9 @@ if __name__ == "__main__":
 
     # Iniciar el dashboard en el hilo principal
     dashboard = Dashboard()
-    # Inicializar el fichero que actuará como base de datos
-    inicializar_fichero()
+#    # Inicializar el fichero que actuará como base de datos
+#    inicializar_fichero()
+    sql = miSQL.MiSQL()
     # Cargar los taxis disponibles al iniciar la central
     cargar_taxis_disponibles()
 
