@@ -5,7 +5,7 @@ from flask import Flask, request, jsonify
 #para pruebas en ciudades como Kazan, Moscu, Alicante, Sapporo, Denver, Chicago
 
 # Configuración de OpenWeather
-API_KEY = "0f4c790c8a5bc4c895353ea2c48e7543"  
+API_KEY = "aqui viene la key"  
 BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
 
 # Inicializar la aplicación Flask
