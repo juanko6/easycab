@@ -81,12 +81,10 @@ def guardar_en_fichero(taxi_id, posicion=None, estado=None):
 
     #print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
 
-
 # Función para escribir las posiciones y estados de los taxis en el fichero
-def guardar_taxi_SQL(taxi_id, posicion, estado):
-    posX, posY = posicion
-    sql.UpdateTAXI(taxi_id, posX, posY, estado)
-
+def guardar_taxi_SQL(taxi_id, posicion, estado, conectado):
+    posY, posX  = posicion
+    sql.UpdateTAXI(taxi_id, posX, posY, estado, conectado)
 
 # Función para guardar datos de clientes en customer_db.txt
 def guardar_en_fichero_customer(cliente_id, destino, estado):
@@ -130,7 +128,7 @@ def cargar_taxis_disponibles():
         for line in lineas[1:]:  # Omitir la cabecera
             try:
                 taxi_id, posicion, estado = line.strip().split(";")  # Leer TaxiID, Posicion, Estado
-                posicion = list(map(int, posicion.strip("[]").split(",")))  # Convertir la posición a lista [x, y]
+                posicion = list(map(int, posicion.strip("[]").split(",")))  # Convertir la posición a lista [y, x]
                 print(f"Ultimo estado guardado: {taxi_id}, {posicion}, {estado}")
                 estado = "esperandoconexion" #Al cargar desde fichero ponemos estado esperando por defecto hasta que recibamos el estado real del taxi.
                 if(autenticar_taxi(int(taxi_id))>0): 
@@ -138,6 +136,7 @@ def cargar_taxis_disponibles():
                     if(estado=="Disponible"):              
                         taxis_disponibles.add(int(taxi_id))
                     guardar_en_fichero(int(taxi_id),posicion, estado) #Guardamos el nuevo estado.
+                    guardar_taxi_SQL(int(taxi_id), posicion, estado, False)  # Guardar estado en SQL
                 else:
                     print(f"Antiguo taxi {taxi_id} no se ha podido autenticar.")
             except ValueError:
@@ -145,6 +144,18 @@ def cargar_taxis_disponibles():
 
     except FileNotFoundError:
         print(f"El fichero {DB_TAXIS} no se encontró, inicializando vacio.")
+
+def cargar_taxis_SQL():
+    result = sql.consulta("SELECT ID_TAXI, POS_X, POS_Y FROM TAXI;")
+    print("----------LIST TAXIS REGISTRADOS-------------")
+    for registro in result:
+        taxi_id, pos_X, pos_Y = registro
+        print(registro)
+        estado = 'SinConexion'
+        conectado = False
+        posicion = [pos_Y,pos_X]
+        guardar_taxi_SQL(taxi_id, posicion, estado, conectado)  # Actualizamos estado en SQL
+
 
 #####
 ########## AUTENTICACION TAXIS ##########
@@ -274,9 +285,7 @@ def consumir_posiciones_taxis():
                 taxis_disponibles.add(taxi_id)
 
             guardar_en_fichero(taxi_id, posicion, estado)  # Guardar estado en el fichero
-
-            guardar_taxi_SQL(taxi_id, posicion, estado)  # Guardar estado en SQL
-
+            guardar_taxi_SQL(taxi_id, posicion, estado, True)  # Guardar estado en SQL
 
 # Función para actualizar el dashboard con nuevos estados
 def actualizar_dashboard(dashboard):
@@ -452,7 +461,8 @@ if __name__ == "__main__":
 #    inicializar_fichero()
     sql = miSQL.MiSQL()
     # Cargar los taxis disponibles al iniciar la central
-    cargar_taxis_disponibles()
+#    cargar_taxis_disponibles()
+    cargar_taxis_SQL()
 
     # Inicializar el consumidor global de servicios
     inicializar_consumer_servicios()

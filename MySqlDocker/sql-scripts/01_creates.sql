@@ -1,6 +1,6 @@
 -- Crear la tabla CLIENTE
 CREATE TABLE CLIENTE (
-    ID_CLIENTE INT AUTO_INCREMENT PRIMARY KEY,       -- ID del cliente (clave primaria, autoincrementable)
+    ID_CLIENTE VARCHAR(2) PRIMARY KEY,       -- ID del cliente (clave primaria, autoincrementable)
     DES_X INT NOT NULL,                          -- Coordenadas del destino
 	DES_Y INT NOT NULL,
     ESTADO VARCHAR(255) NOT NULL,                    -- Estado del cliente (por ejemplo, "esperando", "en ruta", etc.)
@@ -15,6 +15,6 @@ CREATE TABLE TAXI (
 	POS_Y INT NOT NULL,
     ESTADO VARCHAR(255) NOT NULL,                    -- Estado del taxi (por ejemplo, "disponible", "ocupado", etc.)
     CONECTADO BOOLEAN NOT NULL,                      -- Indica si el taxi está conectado o no (BOOLEANO)
-    ID_CLIENTE INT,                                  -- ID del cliente asociado al taxi (relación con CLIENTE)
+    ID_CLIENTE VARCHAR(2),                                  -- ID del cliente asociado al taxi (relación con CLIENTE)
     FOREIGN KEY (ID_CLIENTE) REFERENCES CLIENTE(ID_CLIENTE)  -- Relación con la tabla CLIENTE
 );
