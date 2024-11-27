@@ -5,13 +5,13 @@ import time
 # Leer equipo.config para obtener la IP del servidor central
 config = configparser.ConfigParser()
 config.read('equipo.config')
-ip_central = config.get('Kafka', 'IP', fallback='192.168.56.1')  # Ajustar sección/clave según el archivo
+ip_central = config.get('Kafka', 'IP', fallback='192.168.24.1')  # Ajustar sección/clave según el archivo
 
 # Parámetros para la configuración
 puerto_central = 5050  # Ajusta el puerto central aquí si es necesario
 ip_sensor = '127.0.0.1'  # IP de los sensores
 id_inicial = 0  # ID inicial de los taxis
-num_taxis = 5  # Cambia esto para ajustar la cantidad de taxis a iniciar
+num_taxis = 3  # Cambia esto para ajustar la cantidad de taxis a iniciar
 puerto_sensor_inicial = 9990  # Puerto de inicio para los sensores
 
 # Iniciar los procesos de taxis y sensores

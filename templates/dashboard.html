@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - EasyCab</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 8px;
+            text-align: center;
+        }
+        #mapa {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            grid-template-rows: repeat(20, 1fr);
+            gap: 1px;
+            background-color: lightgray;
+        }
+        .celda {
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .taxi {
+            background-color: yellow;
+        }
+        .cliente {
+            background-color: blue;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dashboard - EasyCab</h1>
+
+    <h2>Taxis</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Taxi ID</th>
+                <th>Posición</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for taxi_id, data in taxis.items() %}
+            <tr>
+                <td>{{ taxi_id }}</td>
+                <td>{{ data.posicion }}</td>
+                <td>{{ data.estado }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Clientes</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Cliente ID</th>
+                <th>Destino</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cliente_id, data in clientes.items() %}
+            <tr>
+                <td>{{ cliente_id }}</td>
+                <td>{{ data.destino }}</td>
+                <td>{{ data.estado }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Mapa</h2>
+    <div id="mapa">
+        {% for y in range(20) %}
+        {% for x in range(20) %}
+        <div class="celda {% if [x, y] in taxis_positions %}taxi{% elif [x, y] in clientes_positions %}cliente{% endif %}">
+            {% if [x, y] in taxis_positions %}🚕{% elif [x, y] in clientes_positions %}👤{% endif %}
+        </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+
+    <h2>Actualizar Ciudad</h2>
+    <form method="POST" action="/api/ciudad">
+        <label for="ciudad">Nueva Ciudad:</label>
+        <input type="text" id="ciudad" name="ciudad" placeholder="Ingrese el nombre de la ciudad">
+        <button type="submit">Actualizar</button>
+    </form>
+    <button onclick="fetch('/api/taxis/base', {method: 'POST'})">Enviar Todos a Base</button>
+</body>
+</html>

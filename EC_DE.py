@@ -153,6 +153,47 @@ class EC_DE:
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
             time.sleep(1)
 
+    def escuchar_comandos(self):
+        """
+        Escucha comandos en el topic del taxi y los procesa.
+        """
+        consumer = KafkaConsumer(
+            self.topic,
+            bootstrap_servers=BOOTSTRAP_SERVER,
+            auto_offset_reset='earliest',
+            enable_auto_commit=True,
+            group_id=f'group_{self.ID}'
+        )
+        print(f"[INFO] Taxi {self.ID} escuchando comandos en {self.topic}")
+        for mensaje in consumer:
+            comando = mensaje.value.decode('utf-8')
+            print(f"[INFO] Taxi {self.ID} recibió comando: {comando}")
+            if comando.startswith("MOVER:"):
+                _, coords = comando.split(":")
+                x, y = map(int, coords.split(","))
+                self.mover_hacia(x, y)
+
+    def mover_hacia(self, dest_x, dest_y):
+        """
+        Mueve el taxi paso a paso hacia la posición objetivo.
+        """
+        print(f"[INFO] Taxi {self.ID} moviéndose hacia ({dest_x}, {dest_y})")
+        while self.posicion != [dest_x, dest_y]:
+            if self.posicion[0] < dest_x:
+                self.posicion[0] += 1
+            elif self.posicion[0] > dest_x:
+                self.posicion[0] -= 1
+            time.sleep(1)
+
+            if self.posicion[1] < dest_y:
+                self.posicion[1] += 1
+            elif self.posicion[1] > dest_y:
+                self.posicion[1] -= 1
+            time.sleep(1)
+
+        print(f"[INFO] Taxi {self.ID} llegó a la posición ({dest_x}, {dest_y})")
+        self.estado = "Disponible"
+
 
     # Función para detener el taxi de forma ordenada
     def detener(self):
