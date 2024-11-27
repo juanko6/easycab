@@ -1,3 +1,6 @@
 taxis_db.txt
 __pycache__/configuracion.cpython-312.pyc
 __pycache__/dashboard.cpython-312.pyc
+city.list.json
+city.list.json.gz
+customer_db.txt
