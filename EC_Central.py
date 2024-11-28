@@ -8,7 +8,17 @@ import os
 from dashboard import Dashboard
 import random
 import configuracion
+import subprocess
+import json
 import miSQL
+from flask import Flask, request, jsonify, render_template
+
+URL_EC_CTC = "http://192.168.1.141:5001/traffic"  # Cambia la IP si EC_CTC está en otro servidor
+CIUDAD_SERVICIO = "Alicante"  # Ciudad donde opera el servicio
+
+# Intervalo de consulta a EC_CTC (en segundos)
+INTERVALO_CONSULTA = 10
+
 
 
 BOOTSTRAP_SERVER = configuracion.Entorno()
@@ -427,11 +437,196 @@ def getPosDestino(destino):
         print(f"No se encontro destino {destino}")
         return (1,1)
     
+
+
+#####
+########## REQUEST CITY TRAFFIC CONTROL ##########
+#####
+class ECCentral:
+    def __init__(self, dashboard):
+        self.estado_trafico = "OK"
+        self.dashboard = dashboard  # Dashboard pasado desde el hilo principal
+        self.producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
+        self.ciudad = CIUDAD_SERVICIO
+        self.app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "templates"))  # Inicializar Flask
+        self.configurar_endpoints()  # Configurar los endpoints REST
+
+
+
+    def configurar_endpoints(self):
+
+        # Estructura inicial de los taxis
+        #self.dashboard.taxis = {
+        #    1: {"posicion": [0, 0], "estado": "Disponible", "cliente_asignado": None},
+        #    2: {"posicion": [10, 10], "estado": "Disponible", "cliente_asignado": None}
+        #}
+
+
+        #self.dashboard.clientes = {
+        #    1: {"destino": [5, 5], "estado": "Esperando"},
+        #    2: {"destino": [10, 15], "estado": "En servicio"}
+        #}
+
+        """Define los endpoints del API REST en Flask."""
+        @self.app.route('/dashboard')
+        def mostrar_dashboard():
+            """
+            Renderiza el dashboard con los datos actuales de los taxis.
+            """
+            taxis = self.dashboard.taxis  # Obtiene los datos actuales de los taxis
+            clientes = getattr(self.dashboard, 'clientes', {})  # Datos de clientes, vacío si no existe
+
+            return render_template("dashboard.html", taxis=taxis, clientes=clientes)
+
+
+
+
+        @self.app.route('/api/dashboard-data', methods=['GET'])
+        def obtener_datos_dashboard():
+            """
+            Devuelve los datos de taxis y clientes en formato JSON, organizados como diccionarios.
+            """
+            try:
+                # Consulta de datos desde la base de datos
+                taxis_resultados = sql.consulta("SELECT ID_TAXI, POS_X, POS_Y, ESTADO, CONECTADO, ID_CLIENTE FROM TAXI") or []
+                clientes_resultados = sql.consulta("SELECT ID_CLIENTE, DES_X, DES_Y, ESTADO, POS_X, POS_Y FROM CLIENTE") or []
+
+                # Convertir resultados en diccionarios
+                taxis = [
+                    {
+                        "id": taxi[0],  # ID_TAXI
+                        "posicion": [taxi[1], taxi[2]],  # POS_X, POS_Y
+                        "estado": taxi[3],  # ESTADO
+                        "conectado": bool(taxi[4]),  # CONECTADO
+                        "cliente_asociado": taxi[5]  # ID_CLIENTE
+                    }
+                    for taxi in taxis_resultados
+                ]
+
+                clientes = [
+                    {
+                        "id": cliente[0],  # ID_CLIENTE
+                        "destino": [cliente[1], cliente[2]],  # DES_X, DES_Y
+                        "estado": cliente[3],  # ESTADO
+                        "posicion": [cliente[4], cliente[5]]  # POS_X, POS_Y
+                    }
+                    for cliente in clientes_resultados
+                ]
+
+                # Retornar los datos en formato JSON
+                return {
+                    "taxis": taxis,
+                    "clientes": clientes
+                }, 200
+
+            except Exception as e:
+                print(f"Error al consultar datos del dashboard: {e}")
+                return {"error": "Error al consultar datos del dashboard"}, 500
+
+
+
+
+
+
+
+        @self.app.route('/api/taxis/mover', methods=['POST'])
+        def mover_taxi():
+            data = request.json
+            taxi_id = data.get('taxi_id')
+            posicion = data.get('posicion')
+
+            if not taxi_id or not posicion:
+                return jsonify({"error": "Debe proporcionar 'taxi_id' y 'posicion'"}), 400
+
+            if taxi_id not in self.dashboard.taxis:
+                return jsonify({"error": f"Taxi con ID {taxi_id} no encontrado"}), 404
+
+            self.enviar_comando_taxi(taxi_id, posicion)
+            return jsonify({"message": f"Comando enviado al taxi {taxi_id} para moverse a {posicion}"}), 200
+
+        @self.app.route('/api/taxis/base', methods=['POST'])
+        def enviar_todos_a_base():
+            for taxi_id in self.dashboard.taxis.keys():
+                self.enviar_comando_taxi(taxi_id, (1, 1))
+            return jsonify({"message": "Todos los taxis han sido enviados a la base"}), 200
+
+        @self.app.route('/api/ciudad', methods=['POST'])
+        def cambiar_ciudad():
+            """
+            Cambia la ciudad global CIUDAD_SERVICIO y actualiza el estado del tráfico.
+            """
+            global CIUDAD_SERVICIO  # Acceder a la variable global
+            # Intentar obtener datos en formato JSON
+            if request.is_json:
+                data = request.get_json()
+                nueva_ciudad = data.get('ciudad')
+            else:
+                # Intentar obtener datos en formato de formulario
+                nueva_ciudad = request.form.get('ciudad')
+
+            if not nueva_ciudad:
+                return jsonify({"error": "Debe proporcionar el nombre de la ciudad"}), 400
+
+            # Cambiar la ciudad global y consultar tráfico
+            CIUDAD_SERVICIO = nueva_ciudad
+            self.estado_trafico = self.consultar_trafico()
+            return jsonify({"message": f"Ciudad cambiada a {CIUDAD_SERVICIO}", "trafico": self.estado_trafico}), 200
+
+
+    def consultar_trafico(self):
+        """Consulta el estado del tráfico en EC_CTC usando curl."""
+        try:
+            url = f"{URL_EC_CTC}?ciudad={CIUDAD_SERVICIO}"
+            result = subprocess.run(
+                ["curl", "-s", url],
+                capture_output=True,
+                text=True
+                
+            )
+
+            if result.returncode != 0:
+                print(f"[ERROR] No se pudo conectar con EC_CTC: {result.stderr}")
+                return
+
+            # Parsear la respuesta JSON
+            datos = json.loads(result.stdout)
+            self.estado_trafico = datos.get("estado_trafico", "KO")
+            print(f"[INFO] Estado del tráfico: {self.estado_trafico}")
+        except Exception as e:
+            print(f"[ERROR] Al consultar EC_CTC: {e}")
+            self.estado_trafico = "KO"
+
+    def verificar_trafico_periodicamente(self):
+        """Consulta el tráfico periódicamente y actualiza el estado en el sistema."""
+        while True:
+            self.consultar_trafico()
+            if self.estado_trafico == "KO":
+                print("[ALERTA] Tráfico no viable. Notificando a los taxis.")
+                self.enviar_todos_a_base()
+            time.sleep(INTERVALO_CONSULTA)
+
+    def enviar_comando_taxi(self, taxi_id, posicion):
+        """Envía un comando al taxi para moverse a una posición específica."""
+        topic_taxi = f"TAXI_{taxi_id}"
+        mensaje = f"MOVER:{posicion[0]},{posicion[1]}"
+        self.producer.send(topic_taxi, value=mensaje.encode('utf-8'))
+        self.producer.flush()
+        print(f"[INFO] Comando enviado a {topic_taxi}: {mensaje}")
+
+    def enviar_todos_a_base(self):
+        """
+        Envía un comando a todos los taxis para regresar a su posición base (1,1).
+        """
+        taxis_disponibles = self.dashboard.taxis.keys()  # IDs de los taxis registrados
+        for taxi_id in taxis_disponibles:
+            self.enviar_comando_taxi(taxi_id, (1, 1))
+        print("[INFO] Todos los taxis enviados a la base.")
 #####
 ########## MAIN ##########
 #####
 
 if __name__ == "__main__":
+
     if len(sys.argv) != 3:
         print("Uso: python EC_Central.py <IP_Central> <Puerto_Central>")
         sys.exit(1)
@@ -456,6 +651,11 @@ if __name__ == "__main__":
     hilo_servidor.daemon = True
     hilo_servidor.start()
 
+    # Iniciar la verificación periódica del tráfico en un hilo
+    central = ECCentral(dashboard)
+    hilo_trafico = threading.Thread(target=central.verificar_trafico_periodicamente, daemon=True)
+    hilo_trafico.start()
+
     # Hilo para consumir posiciones y estados
     hilo_consumir_posiciones = threading.Thread(target=consumir_posiciones_taxis)
     hilo_consumir_posiciones.daemon = True
@@ -472,5 +672,4 @@ if __name__ == "__main__":
     hilo_consumir_posiciones.start()
 
 
-    dashboard.after(1000, actualizar_dashboard, dashboard)
-    dashboard.mainloop()
+    central.app.run(host="0.0.0.0", port=5000, debug=False)

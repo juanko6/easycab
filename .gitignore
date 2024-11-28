@@ -5,3 +5,4 @@ customer_db.txt
 city.list.json
 .gitignore
 city.list.json.gz
+.env

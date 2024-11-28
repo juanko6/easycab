@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - EasyCab</title>
+    <style>
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 8px;
+            text-align: center;
+        }
+        #mapa {
+            display: grid;
+            grid-template-columns: repeat(20, 1fr);
+            grid-template-rows: repeat(20, 1fr);
+            gap: 1px;
+            background-color: lightgray;
+        }
+        .celda {
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .taxi {
+            background-color: yellow;
+        }
+        .cliente {
+            background-color: blue;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dashboard - EasyCab</h1>
+
+    <h2>Taxis</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Taxi ID</th>
+                <th>Posición</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for taxi in taxis %}
+            <tr>
+                <td>{{ taxi.id }}</td>
+                <td>{{ taxi.posicion }}</td>
+                <td>{{ taxi.estado }}</td>
+                <td>{{ "Conectado" if taxi.conectado else "Desconectado" }}</td>
+                <td>{{ taxi.cliente_asociado if taxi.cliente_asociado else "Ninguno" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        
+    </table>
+
+    <h2>Clientes</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Cliente ID</th>
+                <th>Destino</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cliente in clientes %}
+            <tr>
+                <td>{{ cliente.id }}</td>
+                <td>{{ cliente.destino }}</td>
+                <td>{{ cliente.estado }}</td>
+                <td>{{ cliente.posicion }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        
+    </table>
+
+    <h2>Mapa</h2>
+    <div id="mapa">
+        {% for y in range(20) %}
+        {% for x in range(20) %}
+        <div class="celda {% if [x, y] in taxis_positions %}taxi{% elif [x, y] in clientes_positions %}cliente{% endif %}">
+            {% if [x, y] in taxis_positions %}🚕{% elif [x, y] in clientes_positions %}👤{% endif %}
+        </div>
+        {% endfor %}
+        {% endfor %}
+    </div>
+
+    <h2>Actualizar Ciudad</h2>
+    <form id="form-actualizar-ciudad">
+        <label for="ciudad">Nueva Ciudad:</label>
+        <input type="text" id="ciudad" name="ciudad" placeholder="Ingrese el nombre de la ciudad">
+        <button type="submit">Actualizar</button>
+    </form>
+    <p id="resultado-actualizacion"></p>
+    <button onclick="fetch('/api/taxis/base', {method: 'POST'})">Enviar Todos a Base</button>
+
+    <script>
+        // Capturar el evento de envío del formulario
+        document.getElementById("form-actualizar-ciudad").addEventListener("submit", function(event) {
+            event.preventDefault(); // Evitar que el formulario recargue la página
+    
+            // Obtener el valor de la ciudad
+            const ciudad = document.getElementById("ciudad").value;
+    
+            // Realizar la solicitud Fetch al backend central
+            fetch("http://127.0.0.1:5000/api/ciudad", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ciudad: ciudad })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultado = document.getElementById("resultado-actualizacion");
+                if (data.error) {
+                    resultado.textContent = `Error: ${data.error}`;
+                    resultado.style.color = "red";
+                } else {
+                    resultado.textContent = `Ciudad actualizada: ${data.message}`;
+                    resultado.style.color = "green";
+    
+                    // Actualizar dinámicamente la tabla de datos si es necesario
+                    actualizarDashboard();
+                }
+            })
+            .catch(error => {
+                console.error("Error al actualizar la ciudad:", error);
+            });
+        });
+    
+        // Función para actualizar dinámicamente el dashboard
+        function actualizarDashboard() {
+            fetch("http://127.0.0.1:5000/api/dashboard-data")
+                .then(response => response.json())
+                .then(data => {
+                    // Aquí puedes actualizar dinámicamente el contenido de las tablas de taxis y clientes
+                    console.log("Datos actualizados del backend:", data);
+                })
+                .catch(error => {
+                    console.error("Error al obtener los datos del dashboard:", error);
+                });
+        }
+    </script>
+</body>
+</html>

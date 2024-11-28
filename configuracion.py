@@ -1,5 +1,6 @@
 
 import configparser
+import os
 
 def Entorno():
     config = configparser.ConfigParser()
@@ -17,3 +18,14 @@ def LicenciasTaxis():
     max = int(config['LICENCIAS']['MAX'])
     print(f"Máximo de licencias taxis permitidas: {max}")  
     return max
+
+def iniTaxis():
+    config = configparser.ConfigParser()
+    config.read('./ArranqueYconfiguracion/equipo.config')
+    ip_server = config['Kafka']['IP']
+    port_server = config['Kafka']['PORT']
+    SOLO_SERVER = ip_server
+    SOLO_PORT = port_server
+    
+
+    return SOLO_SERVER, SOLO_PORT

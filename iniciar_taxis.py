@@ -2,6 +2,7 @@ import subprocess
 import configparser
 import time
 
+
 # Leer equipo.config para obtener la IP del servidor central
 config = configparser.ConfigParser()
 config.read('equipo.config')
