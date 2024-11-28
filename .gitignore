@@ -1,3 +1,7 @@
 taxis_db.txt
 __pycache__/
 ArranqueYconfiguracion/Instalacion/kafka/
+customer_db.txt
+city.list.json
+.gitignore
+city.list.json.gz

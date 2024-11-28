@@ -1,4 +1,4 @@
-version: '2.27.1'  # Versión de Compose
+#version: '2.27.1'  # Versión de Compose
 
 services:  # Definición de los servicios (contenedores)
   mysql:
