@@ -1,9 +1,13 @@
+Instalar librerias python
+desde el directorio del proyecto ejecutar:
+python -m pip install -r PY_Requirements.txt
+
 descargar apache-kafka
 variables de entorno
 cambiar ip del server
 
 
-Configuracion de KAFKA
+Configuracion de KAFKA-python
 py -m pip install kafka-python
 cambiar en el archivo codec.py de 
 C:\Users\juank\AppData\Local\Programs\Python\Python312\Lib\site-packages\kafka\codec.py
