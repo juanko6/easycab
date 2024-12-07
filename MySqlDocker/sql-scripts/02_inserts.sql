@@ -3,3 +3,15 @@ USE EasyCabDB;
 
 INSERT INTO TAXI (POS_X,POS_Y,ESTADO,CONECTADO) VALUES (3,8,'OK',false);
 INSERT INTO TAXI (POS_X,POS_Y,ESTADO,CONECTADO) VALUES (11,10,'OK',false);
+
+
+
+INSERT INTO UBICACIONES (ID_UBICACION,POS_X,POS_Y) 
+    VALUES 
+    ('A',5,3),
+    ('B',2,11),
+    ('C',8,16),
+    ('D',17,16),
+    ('E',19,10),
+    ('F',11,5),
+    ('G',11,19);

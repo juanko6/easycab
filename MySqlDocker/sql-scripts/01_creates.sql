@@ -18,3 +18,10 @@ CREATE TABLE TAXI (
     ID_CLIENTE VARCHAR(2),                                  -- ID del cliente asociado al taxi (relación con CLIENTE)
     FOREIGN KEY (ID_CLIENTE) REFERENCES CLIENTE(ID_CLIENTE)  -- Relación con la tabla CLIENTE
 );
+
+-- Crear la tabla TAXI
+CREATE TABLE UBICACIONES (
+    ID_UBICACION VARCHAR(2) PRIMARY KEY,         -- ID del taxi (clave primaria, autoincrementable)
+    POS_X INT NOT NULL,                        -- Coordenadas actuales del taxi
+	POS_Y INT NOT NULL
+);

@@ -5,7 +5,7 @@ import threading
 import time
 import sys
 import os
-from dashboard import Dashboard
+#from dashboard import Dashboard
 import random
 import configuracion
 import subprocess
@@ -295,7 +295,7 @@ def actualizar_dashboard(dashboard):
 ########## CUSTOMER ##########
 #####
 
-def iniciar_ubicacion_cliente(id, dashboard):
+def iniciar_ubicacion_cliente(id):
     # letras = ['a', 'b', 'c', 'd', 'e']
     # ubicaciones_ocupadas = set()
 
@@ -306,9 +306,9 @@ def iniciar_ubicacion_cliente(id, dashboard):
         # if ubicacion not in ubicaciones_ocupadas: //Permitimos que dos clientes puedan estar en la misma ubicación.
         if id not in clientes:
             clientes[id] = ubicacion
-            dashboard.actulizarDatosCliente(id, columna, fila, "Esperando")    
+#            dashboard.actulizarDatosCliente(id, columna, fila, "Esperando")    
 
-    dashboard.actualizar_clientes()
+#    dashboard.actualizar_clientes()
 
 def inicializar_consumer_servicios():
     #Inicializa el consumidor global para servicios de taxis
@@ -347,7 +347,7 @@ def consumir_solicitudes_clientes():
         print(f"Disponibles:....{taxis_disponibles}")
         if taxis_disponibles:
             taxi_id_disponible = taxis_disponibles.pop() # Obtener taxi y marcar como no disponible
-            iniciar_ubicacion_cliente(cliente_id, dashboard)
+            iniciar_ubicacion_cliente(cliente_id)
             enviar_respuesta_cliente(cliente_id, "OK")  # Enviar OK servicio aceptado.    
             guardar_en_fichero_customer(cliente_id, destino, "OK")
             asignar_taxi(taxi_id_disponible, destino, cliente_id)                         
@@ -361,11 +361,11 @@ def asignar_taxi(taxi_id, destino, cliente_id):
     producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
     topic_taxi = f"TAXI_{taxi_id}"
         #0 - Obtener ubicación de destino
-    posDetino = getPosDestino(destino)
+    posDetino = getPosUbicacion(destino)
         #1 - obtener ubicacion CLIENTE.
     ubicacion_Cliente = clientes[cliente_id]    
     columna, fila = ubicacion_Cliente
-    dashboard.refrescar_cliente(cliente_id, columna, fila, "OK. Sin Taxi") 
+#    dashboard.refrescar_cliente(cliente_id, columna, fila, "OK. Sin Taxi") 
 
     # Registrar el servicio en curso
     servicios_en_curso[taxi_id] = {
@@ -404,7 +404,7 @@ def procesar_mensajes_servicios():
                     if contenido == 1:  # taxi recoge al cliente
                         cliente_id = servicio['cliente_id']
                         columna, fila = servicio['origen']
-                        dashboard.refrescar_cliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}")
+#                        dashboard.refrescar_cliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}")
                         print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}")
                     
                     elif contenido == 2:  # taxi confirma llegada al destino
@@ -415,7 +415,7 @@ def procesar_mensajes_servicios():
                         taxis_disponibles.add(taxi_id)
                         clientes[cliente_id] = pos_destino
                         columna, fila = pos_destino
-                        dashboard.refrescar_cliente(cliente_id, columna, fila, "FIN")
+#                        dashboard.refrescar_cliente(cliente_id, columna, fila, "FIN")
                         enviar_respuesta_cliente(cliente_id, "FIN")
                         del servicios_en_curso[taxi_id]  # Eliminar el servicio completado
 
@@ -427,25 +427,17 @@ def enviar_respuesta_cliente(cliente_id, respuesta):
     producer.send('Central-Customer', value=mensaje.encode('utf-8'))
     producer.flush()
 
-def getPosDestino(destino):
-    valor = None
-    for pos, valor in dashboard.destinos.items():
-        if valor == destino:
-            return pos
-            break
-    if valor is None:
-        print(f"No se encontro destino {destino}")
-        return (1,1)
-    
-
+def getPosUbicacion(destino):
+    pos = sql.getPosUbicacion(destino)
+    return pos
 
 #####
 ########## REQUEST CITY TRAFFIC CONTROL ##########
 #####
 class ECCentral:
-    def __init__(self, dashboard):
+    def __init__(self):
         self.estado_trafico = "OK"
-        self.dashboard = dashboard  # Dashboard pasado desde el hilo principal
+#        self.dashboard = dashboard  # Dashboard pasado desde el hilo principal
         self.producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
         self.ciudad = CIUDAD_SERVICIO
         self.app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "templates"))  # Inicializar Flask
@@ -636,9 +628,9 @@ if __name__ == "__main__":
     print(f"***** [EC_Central] ***** Iniciando con IP: {IP_CENTRAL} y Puerto: {PORT_CENTRAL}")
 
     # Iniciar el dashboard en el hilo principal
-    dashboard = Dashboard()
+#    dashboard = Dashboard()
 
-#    # Inicializar base de datos
+    # Inicializar base de datos
     sql = miSQL.MiSQL()
     # Cargar los taxis al iniciar la central
     cargar_taxis_SQL()
@@ -652,7 +644,7 @@ if __name__ == "__main__":
     hilo_servidor.start()
 
     # Iniciar la verificación periódica del tráfico en un hilo
-    central = ECCentral(dashboard)
+    central = ECCentral()
     hilo_trafico = threading.Thread(target=central.verificar_trafico_periodicamente, daemon=True)
     hilo_trafico.start()
 

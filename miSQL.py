@@ -22,12 +22,32 @@ class MiSQL():
             cursor.execute(query)
             for table in cursor.fetchall():
                 ret.append( table)
-            cursor.close()
             return ret
         except mysql.connector.Error as e:
             print(f"Error de MySQL: {e}")        
         finally:
             cursor.close()
+
+    def getPosUbicacion(self, IdUbicacion):
+        cursor = self.connection.cursor()
+        query = f"SELECT POS_X, POS_Y FROM UBICACIONES WHERE ID_UBICACION = {IdUbicacion}"
+        posicion = ()
+
+        try:
+            cursor.execute(query)
+            resultado = cursor.fetchone()
+            if resultado is not None:
+                posicion = (resultado[0], resultado[1])
+            else:
+                posicion = None
+
+        except mysql.connector.Error as e:
+            print(f"Error de MySQL: {e}")
+            existe = False
+        finally:            
+            cursor.close()
+            
+        return posicion
 
     def checkTaxiId(self, id):
         cursor = self.connection.cursor()
@@ -44,9 +64,8 @@ class MiSQL():
         except mysql.connector.Error as e:
             print(f"Error de MySQL: {e}")
             existe = False
-        #finally:
-            
-        cursor.close()
+        finally:            
+            cursor.close()
 
         return existe
 
