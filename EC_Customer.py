@@ -1,5 +1,6 @@
 import sys
 import time
+import random
 import json
 from kafka import KafkaProducer, KafkaConsumer
 import configuracion
@@ -7,6 +8,9 @@ import configuracion
 BOOTSTRAP_SERVER = configuracion.Entorno()
 FICHERO_SOLICITUDES = "EC_Requests/Requests.json"
 LIMPIAR = False
+
+MAPA_FILAS = 20
+MAPA_COLUMNAS = 20
 
 class Customer ():
     def __init__(self, ID, bootstrap, solicitudes):
@@ -24,9 +28,17 @@ class Customer ():
                                       auto_offset_reset='earliest',
                                       enable_auto_commit=True,
                                       group_id=f"group_{self.ID}")
+        self.ubicacion = self.iniciar_ubicacion()
+
+    def iniciar_ubicacion(self):
+        fila = random.randint(0, MAPA_FILAS - 1)
+        columna = random.randint(0, MAPA_COLUMNAS - 1)
+        ubicacion = (columna, fila)
+        # if ubicacion not in ubicaciones_ocupadas: //Permitimos que dos clientes puedan estar en la misma ubicación.
+        return ubicacion
 
     def start(self):        
-        print(f"Iniciando cliente '{cliente_id}'")
+        print(f"Iniciando cliente '{cliente_id}', en posición {self.ubicacion}")
         if not LIMPIAR:      
             print(f"Abrir fichero solicitudes: {self.FicheroDetinos}")
             with open(self.FicheroDetinos , "r") as file:
@@ -36,7 +48,7 @@ class Customer ():
 
             for request in requests:
                 destino = request['Id']
-                solicitud = f"{self.ID};{destino}"
+                solicitud = f"{self.ID};{destino};{self.ubicacion[0]},{self.ubicacion[1]}"
                 
                 print(f"{self.ID}: Solictando Taxi a Central para destino {destino}")
                 self.producer.send(topic='Customer-Central', value=solicitud.encode('utf-8'))
@@ -56,23 +68,27 @@ class Customer ():
         finalizdo = False
         for message in self.consumer:
             mensaje = message.value.decode('utf-8')
-            if LIMPIAR:
+            if LIMPIAR:     #Para poder limpiar el buffer de kafka durante las pruebas.
                 print(f"[LIMPIANDO] Mensajes recibidos {mensaje}")
-            cliente_ID, respuesta = mensaje.split(";")
-            if cliente_ID == self.ID and not LIMPIAR:
-                print(f"Respuesta de la central para el cliente '{self.ID}': {respuesta}")
-                # Si recibimos "OK" o "KO", la solicitud ha sido procesada
-                if respuesta == "OK":
-                    print(f"Servicio aceptado.") #Esperamos a que se complete.
-                elif respuesta == "KO":
-                    print(f"Servicio anulado.")                
-                    finalizdo = True   #Salimos para pedir otro servicio.
-                elif respuesta == "FIN":
-                    print(f"Servicio completado.")
-                    finalizdo = True  #Salimos para pedir otro servicio.
-            #else:
-            #    print(f"{self.ID}:No es para mi lo obvio")        
-            self.consumer.commit()
+                self.consumer.commit()
+            else:
+                cliente_ID, respuesta = mensaje.split("|")
+                if cliente_ID == self.ID and not LIMPIAR:
+                    print(f"Respuesta de la central para el cliente '{self.ID}': {respuesta}")
+                    # Si recibimos "OK" o "KO", la solicitud ha sido procesada
+                    if respuesta == "OK":
+                        print(f"Servicio aceptado.") #Esperamos a que se complete.
+                    elif respuesta == "KO":
+                        print(f"Servicio anulado.")                
+                        finalizdo = True   #Salimos para pedir otro servicio.
+                    elif respuesta.startswith("FIN"):
+                        print(f"Servicio completado.")
+                        finalizdo = True  #Salimos para pedir otro servicio.
+                        fin, destino = respuesta.split(';')
+                        self.ubicacion = destino.split(',')
+                    self.consumer.commit()
+                #else:
+                #    print(f"{self.ID}:No es para mi lo obvio")        
             if finalizdo:
                 break
 

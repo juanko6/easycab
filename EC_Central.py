@@ -5,8 +5,6 @@ import threading
 import time
 import sys
 import os
-#from dashboard import Dashboard
-import random
 import configuracion
 import subprocess
 import json
@@ -32,9 +30,6 @@ DB_CUSTOMERS = "customer_db.txt"  # Fichero que actuará como base de datos para
 
 MAX_TAXIS = configuracion.LicenciasTaxis()
 
-MAPA_FILAS = 20
-MAPA_COLUMNAS = 20
-
 servicios_en_curso = {}  # Para trackear servicios activos
 consumer_servicios = None  # Consumer global para servicios
 
@@ -44,102 +39,17 @@ newTopicsTaxis = set()
 taxis_disponibles = set()
 taxi_ids = {}  # Taxi_ID : Conexión
 nuevos_estados = {} 
-clientes = {}
 
 #####
 ########## PERSITENCIA DATOS ##########
 #####
-# Función para guardar las posiciones y estados de los taxis en el fichero
-def guardar_en_fichero(taxi_id, posicion=None, estado=None):
-    lineas = []
-    taxi_encontrado = False
-
-    try:
-        with open(DB_TAXIS, "r") as file:
-            lineas = file.readlines()
-    except FileNotFoundError:
-        with open(DB_TAXIS, "w") as file:
-            file.write("TaxiID;Posicion;Estado\n")
-        lineas = ["TaxiID;Posicion;Estado\n"]
-
-    for idx, linea in enumerate(lineas):
-        if linea.startswith(f"{taxi_id};"):
-            taxi_encontrado = True
-            lineas[idx] = f"{taxi_id};[{int(posicion[0])},{int(posicion[1])}];{estado}\n"
-            break
-
-    if not taxi_encontrado:
-        posicion_str = f"[{int(posicion[0])},{int(posicion[1])}]" if posicion else "[0,0]"
-        estado_str = estado if estado else "desconocido"
-        lineas.append(f"{taxi_id};{posicion_str};{estado_str}\n")
-
-    with open(DB_TAXIS, "w") as file:
-        file.writelines(lineas)
-
-    #print(f"Datos guardados en {DB_TAXIS}: Taxi {taxi_id} - Posición {posicion} - Estado {estado}")
+def guardar_cliente_SQL(cliente_id, destino, estado, posicion):
+    return sql.insertOrUpdateCliente(cliente_id, destino[0], destino[1], estado, posicion[0], posicion[1])
 
 # Función para guradar las posiciones y estados de los taxis 
 def guardar_taxi_SQL(taxi_id, posicion, estado, conectado):
     posY, posX  = posicion
     sql.UpdateTAXI(taxi_id, posX, posY, estado, conectado)
-
-# Función para guardar datos de clientes en customer_db.txt
-def guardar_en_fichero_customer(cliente_id, destino, estado):
-    lineas = []
-    cliente_encontrado = False
-
-    # Intentar leer el archivo o crearlo si no existe
-    try:
-        with open(DB_CUSTOMERS, "r") as file:
-            lineas = file.readlines()
-    except FileNotFoundError:
-        with open(DB_CUSTOMERS, "w") as file:
-            file.write("ClienteID;Destino;Estado\n")
-        lineas = ["ClienteID;Destino;Estado\n"]
-
-    # Buscar el cliente en el archivo para actualizar su información
-    for idx, linea in enumerate(lineas):
-        if linea.startswith(f"{cliente_id};"):
-            cliente_encontrado = True
-            lineas[idx] = f"{cliente_id};{destino};{estado}\n"
-            break
-
-    # Si el cliente no se encuentra, añadir una nueva entrada
-    if not cliente_encontrado:
-        lineas.append(f"{cliente_id};{destino};{estado}\n")
-
-    # Escribir los datos actualizados en el archivo
-    with open(DB_CUSTOMERS, "w") as file:
-        file.writelines(lineas)
-
-    #print(f"Datos guardados en {DB_CUSTOMERS}: Cliente {cliente_id} - Destino {destino} - Estado {estado}")
-
-
-# Función para cargar los taxis disponibles desde el fichero
-def cargar_taxis_disponibles():
-    try:
-        with open(DB_TAXIS, "r") as file:
-            lineas = file.readlines()
-
-        for line in lineas[1:]:  # Omitir la cabecera
-            try:
-                taxi_id, posicion, estado = line.strip().split(";")  # Leer TaxiID, Posicion, Estado
-                posicion = list(map(int, posicion.strip("[]").split(",")))  # Convertir la posición a lista [y, x]
-                print(f"Ultimo estado guardado: {taxi_id}, {posicion}, {estado}")
-                estado = "esperandoconexion" #Al cargar desde fichero ponemos estado esperando por defecto hasta que recibamos el estado real del taxi.
-                if(autenticar_taxiSQL(int(taxi_id))>0): 
-                    print(f"Taxi {taxi_id} cargado: Posicion {posicion}, Estado {estado}")
-                    if(estado=="Disponible"):              
-                        taxis_disponibles.add(int(taxi_id))
-                    guardar_en_fichero(int(taxi_id),posicion, estado) #Guardamos el nuevo estado.
-                    guardar_taxi_SQL(int(taxi_id), posicion, estado, False)  # Guardar estado en SQL
-                else:
-                    print(f"Antiguo taxi {taxi_id} no se ha podido autenticar.")
-            except ValueError:
-                print(f"Error al leer la línea: {line.strip()}")  # Manejar líneas mal formateadas
-
-    except FileNotFoundError:
-        print(f"El fichero {DB_TAXIS} no se encontró, inicializando vacio.")
 
 #Funcion para iniciar los taxis desde la base de datos.
 def cargar_taxis_SQL():
@@ -147,10 +57,10 @@ def cargar_taxis_SQL():
     print("----------LIST TAXIS REGISTRADOS-------------")
     for registro in result:
         taxi_id, pos_X, pos_Y = registro
-        print(registro)
         estado = 'SinConexion'
         conectado = False
         posicion = [pos_Y,pos_X]
+        print(f"{taxi_id}: ({pos_X},{pos_Y}); {estado}")
         guardar_taxi_SQL(taxi_id, posicion, estado, conectado)  # Actualizamos estado en SQL
 
 
@@ -279,36 +189,12 @@ def consumir_posiciones_taxis():
             elif taxi_id not in taxis_disponibles and estado == "Disponible":
                 taxis_disponibles.add(taxi_id)
 
-            guardar_en_fichero(taxi_id, posicion, estado)  # Guardar estado en el fichero
+#           guardar_en_fichero(taxi_id, posicion, estado)  # Guardar estado en el fichero
             guardar_taxi_SQL(taxi_id, posicion, estado, True)  # Guardar estado en SQL
-
-# Función para actualizar el dashboard con nuevos estados
-def actualizar_dashboard(dashboard):
-    global nuevos_estados
-    if nuevos_estados:
-        for taxi_id, estado in nuevos_estados.items():
-            dashboard.actualizar_estado_taxi(int(taxi_id), estado)  # Actualizamos el estado en el dashboard
-        nuevos_estados = {}  # Limpiamos los estados procesados
-    dashboard.after(1000, actualizar_dashboard, dashboard)  # Repetir cada segundo
 
 #####
 ########## CUSTOMER ##########
 #####
-
-def iniciar_ubicacion_cliente(id):
-    # letras = ['a', 'b', 'c', 'd', 'e']
-    # ubicaciones_ocupadas = set()
-
-    if id not in clientes:
-        fila = random.randint(0, MAPA_FILAS - 1)
-        columna = random.randint(0, MAPA_COLUMNAS - 1)
-        ubicacion = (columna, fila)
-        # if ubicacion not in ubicaciones_ocupadas: //Permitimos que dos clientes puedan estar en la misma ubicación.
-        if id not in clientes:
-            clientes[id] = ubicacion
-#            dashboard.actulizarDatosCliente(id, columna, fila, "Esperando")    
-
-#    dashboard.actualizar_clientes()
 
 def inicializar_consumer_servicios():
     #Inicializa el consumidor global para servicios de taxis
@@ -343,34 +229,35 @@ def consumir_solicitudes_clientes():
     for message in consumer:
         solicitud = message.value.decode('utf-8')
         print(f"Nueva solicitud: {solicitud}")                
-        cliente_id, destino = solicitud.split(";")        
+        cliente_id, destino_id, posicionStr = solicitud.split(";")
+        posicion = posicionStr.split(",")
+        destino = getPosUbicacion(destino_id)
         print(f"Disponibles:....{taxis_disponibles}")
         if taxis_disponibles:
             taxi_id_disponible = taxis_disponibles.pop() # Obtener taxi y marcar como no disponible
-            iniciar_ubicacion_cliente(cliente_id)
+#            iniciar_ubicacion_cliente(cliente_id)
             enviar_respuesta_cliente(cliente_id, "OK")  # Enviar OK servicio aceptado.    
-            guardar_en_fichero_customer(cliente_id, destino, "OK")
-            asignar_taxi(taxi_id_disponible, destino, cliente_id)                         
+#            guardar_en_fichero_customer(cliente_id, destino, "OK")
+            posicion = guardar_cliente_SQL(cliente_id, destino, "OK", posicion)
+            asignar_taxi(taxi_id_disponible, destino_id, destino, cliente_id, posicion)                         
         else:
             enviar_respuesta_cliente(cliente_id, "KO")  # Enviar KO si no hay taxis
-            guardar_en_fichero_customer(cliente_id, destino, "OK")
+#            guardar_en_fichero_customer(cliente_id, destino, "KO")
+            guardar_cliente_SQL(cliente_id, destino, "KO", posicion)
             print("No hay taxis disponibles en este momento")                  
 
 # Función para asignar un taxi a una solicitud
-def asignar_taxi(taxi_id, destino, cliente_id):
+def asignar_taxi(taxi_id, destino, posDetino, cliente_id, posCliente):
     producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
     topic_taxi = f"TAXI_{taxi_id}"
-        #0 - Obtener ubicación de destino
-    posDetino = getPosUbicacion(destino)
-        #1 - obtener ubicacion CLIENTE.
-    ubicacion_Cliente = clientes[cliente_id]    
-    columna, fila = ubicacion_Cliente
-#    dashboard.refrescar_cliente(cliente_id, columna, fila, "OK. Sin Taxi") 
+    
+    # 0 - Guardar cliente asignado en TAXI
+    sql.UpdateClienteTAXI(taxi_id, cliente_id)
 
-    # Registrar el servicio en curso
+    # 1 - Registrar el servicio en curso
     servicios_en_curso[taxi_id] = {
         'cliente_id': cliente_id,
-        'origen': ubicacion_Cliente,
+        'origen': posCliente,
         'destino': destino,
         'pos_destino': posDetino
     }
@@ -378,16 +265,11 @@ def asignar_taxi(taxi_id, destino, cliente_id):
     subscribir_a_servicio_taxi(taxi_id)
 
         #2 - Enviar TAXI a por CLIENTE.
-    servicio = f"{ubicacion_Cliente};{posDetino}"
+    servicio = f"{posCliente};{posDetino}"
     producer.send(topic_taxi, value=servicio.encode('utf-8'))
     producer.flush()
     print(f"Servicio para {topic_taxi}: {servicio}")
 
-    #3 - Esperar a que el TAXI informe estado del servicio
-#    thread = threading.Thread(target=eseprar_servicio_taxi, args=(taxi_id, cliente_id, posDetino, destino))
-#    thread.start()  
-
-#def eseprar_servicio_taxi(taxi_id, cliente_id, posDetino, destino):
 def procesar_mensajes_servicios():
     #Procesa los mensajes de servicios de todos los taxis en curso
     print("***Inicio hilo procesar servicios***")
@@ -403,8 +285,7 @@ def procesar_mensajes_servicios():
                     
                     if contenido == 1:  # taxi recoge al cliente
                         cliente_id = servicio['cliente_id']
-                        columna, fila = servicio['origen']
-#                        dashboard.refrescar_cliente(cliente_id, columna, fila, f"OK. Taxi {taxi_id}")
+                        sql.UpdateEstadoCLIENTE(cliente_id, f'Taxi_{taxi_id}')
                         print(f"Cliente '{cliente_id}' recogido por taxi {taxi_id}")
                     
                     elif contenido == 2:  # taxi confirma llegada al destino
@@ -413,17 +294,16 @@ def procesar_mensajes_servicios():
                         pos_destino = servicio['pos_destino']
                         print(f"Cliente '{cliente_id}' dejado en destino {destino} por taxi {taxi_id}")
                         taxis_disponibles.add(taxi_id)
-                        clientes[cliente_id] = pos_destino
                         columna, fila = pos_destino
-#                        dashboard.refrescar_cliente(cliente_id, columna, fila, "FIN")
-                        enviar_respuesta_cliente(cliente_id, "FIN")
+                        sql.UpdateLlegadaCLIENTE(cliente_id, columna, fila, f'FIN')
+                        enviar_respuesta_cliente(cliente_id, f"FIN;{columna},{fila}")
                         del servicios_en_curso[taxi_id]  # Eliminar el servicio completado
 
 # Función para enviar la respuesta al cliente
 def enviar_respuesta_cliente(cliente_id, respuesta):
     producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)    
     print(f"Enviando respuesta {respuesta} al cliente '{cliente_id}'")
-    mensaje = f"{cliente_id};{respuesta}"
+    mensaje = f"{cliente_id}|{respuesta}"
     producer.send('Central-Customer', value=mensaje.encode('utf-8'))
     producer.flush()
 
@@ -514,11 +394,6 @@ class ECCentral:
             except Exception as e:
                 print(f"Error al consultar datos del dashboard: {e}")
                 return {"error": "Error al consultar datos del dashboard"}, 500
-
-
-
-
-
 
 
         @self.app.route('/api/taxis/mover', methods=['POST'])
@@ -626,9 +501,6 @@ if __name__ == "__main__":
     IP_CENTRAL = sys.argv[1]
     PORT_CENTRAL = int(sys.argv[2])
     print(f"***** [EC_Central] ***** Iniciando con IP: {IP_CENTRAL} y Puerto: {PORT_CENTRAL}")
-
-    # Iniciar el dashboard en el hilo principal
-#    dashboard = Dashboard()
 
     # Inicializar base de datos
     sql = miSQL.MiSQL()

@@ -28,9 +28,10 @@ class MiSQL():
         finally:
             cursor.close()
 
+    #Devuelve tupla de la ubicacion solicitada (x,y)
     def getPosUbicacion(self, IdUbicacion):
         cursor = self.connection.cursor()
-        query = f"SELECT POS_X, POS_Y FROM UBICACIONES WHERE ID_UBICACION = {IdUbicacion}"
+        query = f"SELECT POS_X, POS_Y FROM UBICACIONES WHERE ID_UBICACION = '{IdUbicacion}'"
         posicion = ()
 
         try:
@@ -46,7 +47,7 @@ class MiSQL():
             existe = False
         finally:            
             cursor.close()
-            
+
         return posicion
 
     def checkTaxiId(self, id):
@@ -55,7 +56,7 @@ class MiSQL():
         
         try:
             cursor.execute(query)
-            resultado = cursor.  fetchone()
+            resultado = cursor.fetchone()
             if resultado is not None:
                 existe = True
             else:
@@ -87,24 +88,83 @@ class MiSQL():
         finally:
             cursor.close()
 
-    #Prueba para actualziar o crear si no existe un taxi.
-    def insertOrUpdateTAXI(self, id, pos_X, pos_Y, estado):
+    def UpdateClienteTAXI(self, id, cliente):
         cursor = self.connection.cursor()
-        query = """INSERT INTO TAXI (ID_TAXI,POS_X,POS_Y,ESTADO)
-                    VALUES (%s, %s,%s,%s)
-                    ON DUPLICATE KEY UPDATE 
-                        ID_TAXI = VALUES(ID_TAXI),
-                        POS_X = VALUES(POS_X),
-                        POS_Y = VALUES(POS_Y),
-                        ESTADO = VALUES(ESTADO)"""
         try:
-            cursor.execute(query, (id, pos_X, pos_Y, estado))
+            query = f"""UPDATE TAXI 
+                        SET ID_CLIENTE = '{cliente}'
+                    WHERE ID_TAXI = {id}"""
+
+            cursor.execute(query)
             self.connection.commit()
         except mysql.connector.Error as e:
             print(f"Error de MySQL: {e}")        
         finally:
             cursor.close()
 
+    def UpdateEstadoCLIENTE(self, id, estado):
+        cursor = self.connection.cursor()
+        try:
+            query = f"""UPDATE CLIENTE 
+                        SET ESTADO = '{estado}'
+                    WHERE ID_CLIENTE = '{id}'"""
+
+            cursor.execute(query)
+            self.connection.commit()
+        except mysql.connector.Error as e:
+            print(f"Error de MySQL: {e}")        
+        finally:
+            cursor.close()   
+
+    def UpdateLlegadaCLIENTE(self, id, pos_X, pos_Y, estado):
+        cursor = self.connection.cursor()
+        try:
+            query = f"""UPDATE CLIENTE 
+                        SET 
+                            ESTADO = '{estado}',
+                            POS_X = '{pos_X}',
+                            POS_Y = '{pos_Y}'
+                    WHERE ID_CLIENTE = '{id}'"""
+
+            cursor.execute(query)
+            self.connection.commit()
+        except mysql.connector.Error as e:
+            print(f"Error de MySQL: {e}")        
+        finally:
+            cursor.close()   
+
+    #Actualziar o crear si no existe un cliente, y retorna la posición actual del cliente.
+    def insertOrUpdateCliente(self, id, des_X, des_Y, estado, pos_X, pos_Y):
+        cursor = self.connection.cursor()
+        queryUPD = """INSERT INTO CLIENTE (ID_CLIENTE, DES_X, DES_Y, ESTADO, POS_X, POS_Y)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE 
+                        DES_X = VALUES(DES_X),
+                        DES_Y = VALUES(DES_Y),
+                        ESTADO = VALUES(ESTADO)
+                        """
+        selectPos = f"SELECT POS_X, POS_Y FROM CLIENTE WHERE ID_CLIENTE = '{id}'"             
+        posicion = () 
+
+        try:
+            cursor.execute(queryUPD, (id, des_X, des_Y, estado, pos_X, pos_Y))
+            
+            self.connection.commit()
+
+            cursor.execute(selectPos)
+            resultado = cursor.fetchone()
+            if resultado is not None:
+                posicion = (resultado[0], resultado[1])
+            else:
+                posicion = None   
+
+        except mysql.connector.Error as e:
+            print(f"Error de MySQL: {e}")        
+        finally:
+            cursor.close()
+
+        return posicion
+
+    #finaliza conexión.
     def cerrar(self):
-        # Cerrar la conexión
         self.connection.close()

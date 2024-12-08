@@ -77,6 +77,7 @@ class EC_DE:
             if ";" in servicio:
                 ubicacion_cliente, destino = servicio.split(';')
                 print(f"[EC_DE] Taxi {self.ID} recibió servicio: Ubicación Cliente {ubicacion_cliente}, Destino {destino}")
+                consumer.commit()
                 self.recibir_servicio(ubicacion_cliente, destino)
 
     def recibir_servicio(self, ubicacion_cliente, destino):
