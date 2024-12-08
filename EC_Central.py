@@ -1,4 +1,5 @@
 import socket
+import ssl
 from kafka import KafkaConsumer, KafkaProducer
 from kafka.admin import KafkaAdminClient, NewTopic
 import threading
@@ -28,7 +29,8 @@ FIN = "FIN"
 DB_TAXIS = "taxis_db.txt"  # Fichero que actuará como base de datos
 DB_CUSTOMERS = "customer_db.txt"  # Fichero que actuará como base de datos para customer
 
-MAX_TAXIS = configuracion.LicenciasTaxis()
+certfile = 'certServ.pem'
+keyfile = 'certServ.pem'
 
 servicios_en_curso = {}  # Para trackear servicios activos
 consumer_servicios = None  # Consumer global para servicios
@@ -73,42 +75,46 @@ def nuevo_taxi(conn, addr):
     print(f"[PETICIÓN AUTENTICACIÓN] {addr} connected.")
     connected = True
     while connected:
-        msg_length = conn.recv(HEADER).decode(FORMAT)
-        if msg_length:
-            msg_length = int(msg_length)
-            msg = conn.recv(msg_length).decode(FORMAT)
-            print(f"Recibido del taxi [{addr}] el mensaje: {msg}")
+        try:
+            msg_length = conn.recv(HEADER).decode(FORMAT)
+            if msg_length:
+                msg_length = int(msg_length)
+                msg = conn.recv(msg_length).decode(FORMAT)
+                print(f"Recibido del taxi [{addr}] el mensaje: {msg}")
 
-            # Extraer el ID del taxi del mensaje
-            if msg.startswith("Nuevo Taxi"):
-                try:
-                    taxi_id = int(msg.split()[2])  # Extraer el ID como entero
-                except (IndexError, ValueError):
-                    conn.send("-3".encode(FORMAT))  # Mensaje malformado
+                # Extraer el ID del taxi del mensaje
+                if msg.startswith("Nuevo Taxi"):
+                    try:
+                        taxi_id = int(msg.split()[2])  # Extraer el ID como entero
+                    except (IndexError, ValueError):
+                        conn.send("-3".encode(FORMAT))  # Mensaje malformado
+                        connected = False
+                        continue
+
+                    # Verificar el ID del taxi
+                    result = autenticar_taxiSQL(taxi_id)
+
+                    if result == 1:
+                        print(f"Taxi con ID {taxi_id} autenticado correctamente.")
+                        conn.send("1".encode(FORMAT))
+                    elif result == 2:
+                        print(f"Ya existe un taxi autenticado con ID {taxi_id}.")
+                        conn.send("2".encode(FORMAT))
+                    elif result == -1:
+                        print(f"ID {taxi_id} no registrado.")
+                        conn.send("-1".encode(FORMAT))
+                    else:                    
+                        print("Autencación fallida.")
+                        conn.send("-2".encode(FORMAT))
+                else:
+                    print("Mensaje inesperado recibido.")
+                    conn.send("-3".encode(FORMAT))
+
+                if msg == FIN:
                     connected = False
-                    continue
-
-                # Verificar el ID del taxi
-                result = autenticar_taxiSQL(taxi_id)
-
-                if result == 1:
-                    print(f"Taxi con ID {taxi_id} autenticado correctamente.")
-                    conn.send("1".encode(FORMAT))
-                elif result == 2:
-                    print(f"Ya existe un taxi autenticado con ID {taxi_id}.")
-                    conn.send("2".encode(FORMAT))
-                elif result == -1:
-                    print(f"ID {taxi_id} no registrado.")
-                    conn.send("-1".encode(FORMAT))
-                else:                    
-                    print("Autencación fallida.")
-                    conn.send("-2".encode(FORMAT))
-            else:
-                print("Mensaje inesperado recibido.")
-                conn.send("-3".encode(FORMAT))
-
-            if msg == FIN:
-                connected = False
+        except Exception as e:
+            print(f"Error en la comunicación con {addr}: {e}")
+            connected = False
 
     conn.close()
 
@@ -133,9 +139,16 @@ def iniciar_autenticacion_taxis(IP_CENTRAL, PORT_CENTRAL):
     server.bind(ADDR)
     server.listen()
     print(f"[AUTENTICACION] Servidor a la escucha en {ADDR}")
+
+    # Crear un contexto SSL
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)  # Para propósito de autenticación de clientes
+    context.load_cert_chain(certfile=certfile, keyfile=keyfile)  # Cargar certificado y clave privada
     while True:
         conn, addr = server.accept()
-        thread = threading.Thread(target=nuevo_taxi, args=(conn, addr))
+        # Envolver el socket de la conexión con SSL
+        conn_ssl = context.wrap_socket(conn, server_side=True)        
+        # Iniciar un hilo para manejar la autenticación con el taxi con el socket ssl.
+        thread = threading.Thread(target=nuevo_taxi, args=(conn_ssl, addr))
         thread.start()
 
 #####

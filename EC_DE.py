@@ -1,10 +1,10 @@
 import signal
 import sys
 import socket
+import ssl
 import threading
 from kafka import KafkaProducer,KafkaConsumer
 import time
-import random
 import configuracion
 
 BOOTSTRAP_SERVER = configuracion.Entorno()
@@ -32,14 +32,22 @@ class EC_DE:
     def conectar_central(self, ADDR_CENTRAL):
         result = 0
         try:
+            #Crear el socket
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # Crear el contexto SSL (usando un contexto no verificado )
+            context = ssl._create_unverified_context()
+            # Establecer la conexión sin cifrar
             client.connect(ADDR_CENTRAL)
             print(f"Conexión establecida con la central en {ADDR_CENTRAL}")
+            # Envolver la conexión con TLS
+            ssock = context.wrap_socket(client, server_hostname=ADDR_CENTRAL[0])
+            print("Conexión segura establecida con la central.")
 
-            # Enviar el ID del taxi para autenticarse
+            # Enviar el ID del taxi para autenticarse usando conexión cifrada
             print(f"Enviando al servidor: Nuevo Taxi {self.ID}")
-            send(client, f"Nuevo Taxi {self.ID}")
-            msgResult = client.recv(2048).decode(FORMAT)
+            send(ssock, f"Nuevo Taxi {self.ID}")
+
+            msgResult = ssock.recv(2048).decode(FORMAT)
             print(f"Respuesta de la central: {msgResult}")
 
             result = int(msgResult)
@@ -55,7 +63,7 @@ class EC_DE:
             else:
                 print("Error desconocido en la autenticación del taxi.")
 
-            client.close()
+            ssock.close()
         except Exception as e:
             print(f"Error al conectar con la central: {e}")
 
