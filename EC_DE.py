@@ -13,6 +13,8 @@ FORMAT = 'utf-8'
 FIN = "FIN"
 MAPA_DIM = 20  # Dimensión del mapa (20x20)
 
+cafile = 'certServ_DE.pem'
+
 class EC_DE:
     def __init__(self, ID, bootstrap):        
         print(f"***** [EC_DE] ***** Iniciando Taxi ID: {ID} con Kafka en {bootstrap}")
@@ -35,7 +37,10 @@ class EC_DE:
             #Crear el socket
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             # Crear el contexto SSL (usando un contexto no verificado )
-            context = ssl._create_unverified_context()
+#            context = ssl._create_unverified_context()
+            # Crear un contexto SSL con verificación del servidor
+            context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=cafile)
+
             # Establecer la conexión sin cifrar
             client.connect(ADDR_CENTRAL)
             print(f"Conexión establecida con la central en {ADDR_CENTRAL}")
