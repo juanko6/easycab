@@ -91,16 +91,31 @@ class MiSQL():
     def UpdateClienteTAXI(self, id, cliente):
         cursor = self.connection.cursor()
         try:
-            query = f"""UPDATE TAXI 
-                        SET ID_CLIENTE = '{cliente}'
-                    WHERE ID_TAXI = {id}"""
+            query = """UPDATE TAXI 
+                        SET ID_CLIENTE = %s
+                    WHERE ID_TAXI = %s"""
 
-            cursor.execute(query)
+            cursor.execute(query, (cliente, id))
             self.connection.commit()
         except mysql.connector.Error as e:
             print(f"Error de MySQL: {e}")        
         finally:
             cursor.close()
+
+    def UpdateEstadoTAXI(self, id, estado, conectado):
+        cursor = self.connection.cursor()
+        try:
+            query = """UPDATE TAXI 
+                        SET ESTADO = %s,
+                            CONECTADO = %s
+                    WHERE ID_TAXI = %s"""
+
+            cursor.execute(query, (estado, conectado, id))
+            self.connection.commit()
+        except mysql.connector.Error as e:
+            print(f"Error de MySQL: {e}")        
+        finally:
+            cursor.close()            
 
     def UpdateEstadoCLIENTE(self, id, estado):
         cursor = self.connection.cursor()
@@ -141,8 +156,11 @@ class MiSQL():
                     ON DUPLICATE KEY UPDATE 
                         DES_X = VALUES(DES_X),
                         DES_Y = VALUES(DES_Y),
-                        ESTADO = VALUES(ESTADO)
+                        ESTADO = VALUES(ESTADO),
+                        POS_X = VALUES(POS_X),
+                        POS_Y = VALUES(POS_Y)
                         """
+        
         selectPos = f"SELECT POS_X, POS_Y FROM CLIENTE WHERE ID_CLIENTE = '{id}'"             
         posicion = () 
 

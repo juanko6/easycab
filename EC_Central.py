@@ -35,6 +35,7 @@ consumer_servicios = None  # Consumer global para servicios
 
 # Lista de taxis disponibles y taxis autenticados
 taxis_autenticados = set()
+taxis_caidos = {}
 newTopicsTaxis = set()
 taxis_disponibles = set()
 taxi_ids = {}  # Taxi_ID : Conexión
@@ -113,6 +114,7 @@ def nuevo_taxi(conn, addr):
 
 def autenticar_taxiSQL(idTaxi):
     if sql.checkTaxiId(idTaxi):
+        print(f"Taxis autenticados: {taxis_autenticados}")
         if idTaxi not in taxis_autenticados:  # Verificar si el ID ya ha sido autenticado
             taxis_autenticados.add(idTaxi)
             newTopicsTaxis.add(f"TAXI_{idTaxi}")
@@ -189,8 +191,26 @@ def consumir_posiciones_taxis():
             elif taxi_id not in taxis_disponibles and estado == "Disponible":
                 taxis_disponibles.add(taxi_id)
 
-#           guardar_en_fichero(taxi_id, posicion, estado)  # Guardar estado en el fichero
             guardar_taxi_SQL(taxi_id, posicion, estado, True)  # Guardar estado en SQL
+            taxis_caidos[taxi_id] = 0 #Para indicar que seguimos recibiendo conexión.
+
+# Para comprobar que si el taxi se ha desconectado.
+# Ponemos valores a 1, si la siguiente vez que se compruebe sigue igual es que no hemos recibido cambios de estado
+def checkConexionTaxi():
+    print("controlando taxis CAIDOS")
+    #obtener los id de los taxis que no han sido actualizados entre chequeos
+    ids_caidos = [id for id, valor in taxis_caidos.items() if valor == 1]
+    for taxi_id in ids_caidos:
+        sql.UpdateEstadoTAXI(taxi_id, 'SinConexion', False)
+        taxis_autenticados.discard(taxi_id)
+
+    taxis_caidos.clear()
+    # Activar flags de los taxis actuales
+    for taxiId in taxis_autenticados:        
+        taxis_caidos[taxiId] = 1
+
+    threading.Timer(5, checkConexionTaxi).start()
+
 
 #####
 ########## CUSTOMER ##########
@@ -235,14 +255,11 @@ def consumir_solicitudes_clientes():
         print(f"Disponibles:....{taxis_disponibles}")
         if taxis_disponibles:
             taxi_id_disponible = taxis_disponibles.pop() # Obtener taxi y marcar como no disponible
-#            iniciar_ubicacion_cliente(cliente_id)
             enviar_respuesta_cliente(cliente_id, "OK")  # Enviar OK servicio aceptado.    
-#            guardar_en_fichero_customer(cliente_id, destino, "OK")
             posicion = guardar_cliente_SQL(cliente_id, destino, "OK", posicion)
             asignar_taxi(taxi_id_disponible, destino_id, destino, cliente_id, posicion)                         
         else:
             enviar_respuesta_cliente(cliente_id, "KO")  # Enviar KO si no hay taxis
-#            guardar_en_fichero_customer(cliente_id, destino, "KO")
             guardar_cliente_SQL(cliente_id, destino, "KO", posicion)
             print("No hay taxis disponibles en este momento")                  
 
@@ -296,6 +313,7 @@ def procesar_mensajes_servicios():
                         taxis_disponibles.add(taxi_id)
                         columna, fila = pos_destino
                         sql.UpdateLlegadaCLIENTE(cliente_id, columna, fila, f'FIN')
+                        sql.UpdateClienteTAXI(taxi_id, None)
                         enviar_respuesta_cliente(cliente_id, f"FIN;{columna},{fila}")
                         del servicios_en_curso[taxi_id]  # Eliminar el servicio completado
 
@@ -535,5 +553,7 @@ if __name__ == "__main__":
     hilo_consumir_posiciones.daemon = True
     hilo_consumir_posiciones.start()
 
+    # Hilo comprobar conexión taxis
+    checkConexionTaxi()
 
     central.app.run(host="0.0.0.0", port=5000, debug=False)

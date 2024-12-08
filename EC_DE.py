@@ -17,7 +17,7 @@ class EC_DE:
     def __init__(self, ID, bootstrap):        
         print(f"***** [EC_DE] ***** Iniciando Taxi ID: {ID} con Kafka en {bootstrap}")
         self.ID = ID
-        self.estado = "esperandoconexion"  # Estado inicial del taxi
+        self.estado = "esperandoSensor"  # Estado inicial del taxi
         self.posicion = [0, 0]  # Inicializar la posición del taxi en (1,1)
         self.topic = f"TAXI_{self.ID}"
         self.sensor_conectado = False  # Estado de conexión del sensor
@@ -138,7 +138,7 @@ class EC_DE:
     def actualizar_estado(self):
         while self.running:
             if not self.sensor_conectado:
-                self.estado = "esperandoconexion"
+                self.estado = "esperandoSensor"
                 print(f"Taxi {self.ID} en espera de conexión con el sensor.")
             else:
                 estado_sensor = leer_estado_sensor(self.ID)
@@ -231,14 +231,14 @@ def manejar_sensor(conn_sensor):
             estado_sensor = conn_sensor.recv(4096).decode(FORMAT)
             if not estado_sensor:
                 print("Sensor desconectado.")
-                taxi.estado = "esperandoconexion"
+                taxi.estado = "esperandoSensor"
                 taxi.sensor_conectado = False
                 enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
                 break
 
             if estado_sensor == "<EOT>":
                 print("Sensor envió <EOT>. Finalizando comunicación.")
-                taxi.estado = "esperandoconexion"
+                taxi.estado = "esperandoSensor"
                 taxi.sensor_conectado = False
                 enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
                 break
@@ -281,21 +281,21 @@ def manejar_sensor(conn_sensor):
 
         except socket.timeout:
             print("Timeout: No se recibió un mensaje del sensor.")
-            taxi.estado = "esperandoconexion"
+            taxi.estado = "esperandoSensor"
             taxi.sensor_conectado = False
             enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
             break
 
         except ConnectionResetError:
             print("Conexión perdida con el sensor.")
-            taxi.estado = "esperandoconexion"
+            taxi.estado = "esperandoSensor"
             taxi.sensor_conectado = False
             enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
             break
 
         except Exception as e:
             print(f"Error al recibir estado del sensor: {e}")
-            taxi.estado = "esperandoconexion"
+            taxi.estado = "esperandoSensor"
             taxi.sensor_conectado = False
             enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
             break
@@ -368,7 +368,7 @@ def aceptar_conexiones_S(server_socket):
         except Exception as e:
             print(f"Error al establecer la conexión con el sensor: {e}")
             taxi.sensor_conectado = False  # Marcar sensor como desconectado
-            taxi.estado = "esperandoconexion"  # Volver al estado de espera
+            taxi.estado = "esperandoSensor"  # Volver al estado de espera
             taxi.running = False  # Detener el taxi en caso de desconexión
 
 ########## MAIN ##########
