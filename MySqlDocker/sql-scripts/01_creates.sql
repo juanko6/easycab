@@ -16,6 +16,7 @@ CREATE TABLE TAXI (
     ESTADO VARCHAR(255) NOT NULL,                    -- Estado del taxi (por ejemplo, "disponible", "ocupado", etc.)
     CONECTADO BOOLEAN NOT NULL,                      -- Indica si el taxi está conectado o no (BOOLEANO)
     ID_CLIENTE VARCHAR(2),                                  -- ID del cliente asociado al taxi (relación con CLIENTE)
+    PASSWORD VARCHAR(255) NOT NULL,
     FOREIGN KEY (ID_CLIENTE) REFERENCES CLIENTE(ID_CLIENTE)  -- Relación con la tabla CLIENTE
 );
 

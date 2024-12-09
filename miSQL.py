@@ -1,4 +1,5 @@
 import mysql.connector
+import bcrypt       #instalar TODO:Comprobar que funciona en PC de laboratorio.
 
 class MiSQL():
     def __init__(self):
@@ -182,6 +183,56 @@ class MiSQL():
             cursor.close()
 
         return posicion
+
+
+    # Función para registrar un nuevo taxi
+    def registrar_usuario(self, id, password):
+    # Generar un hash para la contraseña
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+        cursor = self.connection.cursor()
+        try:
+            # Insertar el nuevo usuario con su contraseña hasheada
+            query = "INSERT INTO TAXI (ID_TAXI, PASSWORD) VALUES (%s, %s)"
+            cursor.execute(query, (id, password_hash))
+            self.connection.commit()  # Confirmar la transacción
+            print("Usuario registrado exitosamente.")
+        except mysql.connector.Error as err:
+            print(f"Error al registrar el usuario: {err}")
+        finally:
+            cursor.close()
+
+    # Función para verificar las credenciales de un usuario
+    def verificar_usuario(self, id, password):
+        cursor = self.connection.cursor()
+        try:
+            # Buscar el usuario por su id_usuario
+            query = "SELECT PASSWORD FROM TAXI WHERE ID_TAXI = %s"
+            cursor.execute(query, (id,))
+            resultado = cursor.fetchone()
+
+            if resultado:
+                # Obtener el hash de la contraseña almacenado
+                stored_password_hash = resultado[0]
+
+                # Verificar si la contraseña proporcionada coincide con el hash almacenado
+                if bcrypt.checkpw(password.encode('utf-8'), stored_password_hash.encode('utf-8')):
+                    print("Autenticación exitosa.")
+                    return True
+                else:
+                    print("Contraseña incorrecta.")
+                    return False
+            else:
+                print("Usuario no encontrado.")
+                return False
+
+        except mysql.connector.Error as err:
+            print(f"Error al verificar el usuario: {err}")
+            return False
+        finally:
+            cursor.close()
+
+
 
     #finaliza conexión.
     def cerrar(self):
