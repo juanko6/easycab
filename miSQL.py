@@ -189,19 +189,22 @@ class MiSQL():
     def registrar_usuario(self, id, password):
     # Generar un hash para la contraseña
         password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
         cursor = self.connection.cursor()
+        ret = False
         try:
             # Insertar el nuevo usuario con su contraseña hasheada
             query = "INSERT INTO TAXI (ID_TAXI, PASSWORD) VALUES (%s, %s)"
             cursor.execute(query, (id, password_hash))
             self.connection.commit()  # Confirmar la transacción
             print("Usuario registrado exitosamente.")
+            ret = True
         except mysql.connector.Error as err:
             print(f"Error al registrar el usuario: {err}")
         finally:
             cursor.close()
-
+            
+        return ret
+    
     # Función para verificar las credenciales de un usuario
     def verificar_usuario(self, id, password):
         cursor = self.connection.cursor()

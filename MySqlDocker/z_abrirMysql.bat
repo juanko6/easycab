@@ -1,0 +1,1 @@
+docker exec -it mysqldocker mysql -u root -p1234

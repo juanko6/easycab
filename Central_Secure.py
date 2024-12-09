@@ -4,6 +4,7 @@ import hashlib
 import os
 import json
 import time
+import miSQL
 
 # Diccionario para almacenar los usuarios (en un caso real, esto sería una base de datos)
 usuarios = {
@@ -90,4 +91,12 @@ def iniciar_servidor(host='127.0.0.1', puerto=12345):
 
 # Iniciar el servidor
 if __name__ == "__main__":
-    iniciar_servidor()
+
+    id = int(input("ID: "))
+    passw = input("password: ")
+    
+    sql = miSQL.MiSQL()
+    #sql.registrar_usuario(id, passw)
+    sql.verificar_usuario(id, passw)
+
+    #iniciar_servidor()
