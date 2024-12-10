@@ -386,12 +386,10 @@ class ECCentral:
             """
             Renderiza el dashboard con los datos actuales de los taxis.
             """
-            taxis = self.dashboard.taxis  # Obtiene los datos actuales de los taxis
+            taxis = taxis_autenticados  # Obtiene los datos actuales de los taxis
             clientes = getattr(self.dashboard, 'clientes', {})  # Datos de clientes, vacío si no existe
 
             return render_template("dashboard.html", taxis=taxis, clientes=clientes)
-
-
 
 
         @self.app.route('/api/dashboard-data', methods=['GET'])
@@ -446,7 +444,7 @@ class ECCentral:
             if not taxi_id or not posicion:
                 return jsonify({"error": "Debe proporcionar 'taxi_id' y 'posicion'"}), 400
 
-            if taxi_id not in self.dashboard.taxis:
+            if taxi_id not in taxis_autenticados:
                 return jsonify({"error": f"Taxi con ID {taxi_id} no encontrado"}), 404
 
             self.enviar_comando_taxi(taxi_id, posicion)
@@ -454,7 +452,7 @@ class ECCentral:
 
         @self.app.route('/api/taxis/base', methods=['POST'])
         def enviar_todos_a_base():
-            for taxi_id in self.dashboard.taxis.keys():
+            for taxi_id in taxis_autenticados:
                 self.enviar_comando_taxi(taxi_id, (1, 1))
             return jsonify({"message": "Todos los taxis han sido enviados a la base"}), 200
 
@@ -525,8 +523,8 @@ class ECCentral:
         """
         Envía un comando a todos los taxis para regresar a su posición base (1,1).
         """
-        taxis_disponibles = self.dashboard.taxis.keys()  # IDs de los taxis registrados
-        for taxi_id in taxis_disponibles:
+        #taxis_disponibles = self.dashboard.taxis.keys()  # IDs de los taxis registrados
+        for taxi_id in taxis_autenticados:
             self.enviar_comando_taxi(taxi_id, (1, 1))
         print("[INFO] Todos los taxis enviados a la base.")
 #####
