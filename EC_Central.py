@@ -11,6 +11,7 @@ import subprocess
 import json
 import miSQL
 from flask import Flask, request, jsonify, render_template
+import Central_Secure
 
 URL_EC_CTC = "http://192.168.1.141:5001/traffic"  # Cambia la IP si EC_CTC está en otro servidor
 CIUDAD_SERVICIO = "Alicante"  # Ciudad donde opera el servicio
@@ -71,65 +72,73 @@ def cargar_taxis_SQL():
 ########## AUTENTICACION TAXIS ##########
 #####
 
-def nuevo_taxi(conn, addr):
-    print(f"[PETICIÓN AUTENTICACIÓN] {addr} connected.")
-    connected = True
-    while connected:
-        try:
-            msg_length = conn.recv(HEADER).decode(FORMAT)
-            if msg_length:
-                msg_length = int(msg_length)
-                msg = conn.recv(msg_length).decode(FORMAT)
-                print(f"Recibido del taxi [{addr}] el mensaje: {msg}")
+# def nuevo_taxi(conn, addr):
+#     print(f"[PETICIÓN AUTENTICACIÓN] {addr} connected.")
+#     connected = True
+#     while connected:
+#         try:
+#             msg_length = conn.recv(HEADER).decode(FORMAT)
+#             if msg_length:
+#                 msg_length = int(msg_length)
+#                 msg = conn.recv(msg_length).decode(FORMAT)
+#                 print(f"Recibido del taxi [{addr}] el mensaje: {msg}")
 
-                # Extraer el ID del taxi del mensaje
-                if msg.startswith("Nuevo Taxi"):
-                    try:
-                        taxi_id = int(msg.split()[2])  # Extraer el ID como entero
-                    except (IndexError, ValueError):
-                        conn.send("-3".encode(FORMAT))  # Mensaje malformado
-                        connected = False
-                        continue
+#                 # Extraer el ID del taxi del mensaje
+#                 if msg.startswith("Nuevo Taxi"):
+#                     try:
+#                         taxi_id = int(msg.split()[2])  # Extraer el ID como entero
+#                     except (IndexError, ValueError):
+#                         conn.send("-3".encode(FORMAT))  # Mensaje malformado
+#                         connected = False
+#                         continue
 
-                    # Verificar el ID del taxi
-                    result = autenticar_taxiSQL(taxi_id)
+#                     # Verificar el ID del taxi
+#                     result = autenticar_taxiSQL(taxi_id)
 
-                    if result == 1:
-                        print(f"Taxi con ID {taxi_id} autenticado correctamente.")
-                        conn.send("1".encode(FORMAT))
-                    elif result == 2:
-                        print(f"Ya existe un taxi autenticado con ID {taxi_id}.")
-                        conn.send("2".encode(FORMAT))
-                    elif result == -1:
-                        print(f"ID {taxi_id} no registrado.")
-                        conn.send("-1".encode(FORMAT))
-                    else:                    
-                        print("Autencación fallida.")
-                        conn.send("-2".encode(FORMAT))
-                else:
-                    print("Mensaje inesperado recibido.")
-                    conn.send("-3".encode(FORMAT))
+#                     if result == 1:
+#                         print(f"Taxi con ID {taxi_id} autenticado correctamente.")
+#                         conn.send("1".encode(FORMAT))
+#                     elif result == 2:
+#                         print(f"Ya existe un taxi autenticado con ID {taxi_id}.")
+#                         conn.send("2".encode(FORMAT))
+#                     elif result == -1:
+#                         print(f"ID {taxi_id} no registrado.")
+#                         conn.send("-1".encode(FORMAT))
+#                     else:                    
+#                         print("Autencación fallida.")
+#                         conn.send("-2".encode(FORMAT))
+#                 else:
+#                     print("Mensaje inesperado recibido.")
+#                     conn.send("-3".encode(FORMAT))
 
-                if msg == FIN:
-                    connected = False
-        except Exception as e:
-            print(f"Error en la comunicación con {addr}: {e}")
-            connected = False
+#                 if msg == FIN:
+#                     connected = False
+#         except Exception as e:
+#             print(f"Error en la comunicación con {addr}: {e}")
+#             connected = False
 
-    conn.close()
+#     conn.close()
 
-def autenticar_taxiSQL(idTaxi):
-    if sql.checkTaxiId(idTaxi):
+# def autenticar_taxiSQL(idTaxi):
+#     if sql.checkTaxiId(idTaxi):
+#         print(f"Taxis autenticados: {taxis_autenticados}")
+#         if idTaxi not in taxis_autenticados:  # Verificar si el ID ya ha sido autenticado
+#             taxis_autenticados.add(idTaxi)
+#             newTopicsTaxis.add(f"TAXI_{idTaxi}")
+            
+#             return 1  # ID autenticado correctamente
+#         else:
+#             return 2  # ID ya autenticado
+#     else:
+#         return -1 # ID no registrado
+
+def autenticar_taxi_token(conn, addr):
+    idTaxi = Central_Secure.autenticar_taxi(conn, addr)
+    if idTaxi :
         print(f"Taxis autenticados: {taxis_autenticados}")
         if idTaxi not in taxis_autenticados:  # Verificar si el ID ya ha sido autenticado
             taxis_autenticados.add(idTaxi)
             newTopicsTaxis.add(f"TAXI_{idTaxi}")
-            
-            return 1  # ID autenticado correctamente
-        else:
-            return 2  # ID ya autenticado
-    else:
-        return -1 # ID no registrado
 
 # Función para iniciar el servidor de autenticación
 def iniciar_autenticacion_taxis(IP_CENTRAL, PORT_CENTRAL):    
@@ -148,7 +157,8 @@ def iniciar_autenticacion_taxis(IP_CENTRAL, PORT_CENTRAL):
         # Envolver el socket de la conexión con SSL
         conn_ssl = context.wrap_socket(conn, server_side=True)        
         # Iniciar un hilo para manejar la autenticación con el taxi con el socket ssl.
-        thread = threading.Thread(target=nuevo_taxi, args=(conn_ssl, addr))
+        #thread = threading.Thread(target=nuevo_taxi, args=(conn_ssl, addr))
+        thread = threading.Thread(target=autenticar_taxi_token, args=(conn_ssl, addr))
         thread.start()
 
 #####

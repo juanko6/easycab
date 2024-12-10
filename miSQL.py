@@ -45,7 +45,6 @@ class MiSQL():
 
         except mysql.connector.Error as e:
             print(f"Error de MySQL: {e}")
-            existe = False
         finally:            
             cursor.close()
 
@@ -206,7 +205,8 @@ class MiSQL():
         return ret
     
     # Función para verificar las credenciales de un usuario
-    def verificar_usuario(self, id, password):
+    def verificar_loginTAXI(self, id, password):
+        ret = False
         cursor = self.connection.cursor()
         try:
             # Buscar el usuario por su id_usuario
@@ -221,21 +221,53 @@ class MiSQL():
                 # Verificar si la contraseña proporcionada coincide con el hash almacenado
                 if bcrypt.checkpw(password.encode('utf-8'), stored_password_hash.encode('utf-8')):
                     print("Autenticación exitosa.")
-                    return True
+                    ret = True
                 else:
                     print("Contraseña incorrecta.")
-                    return False
             else:
                 print("Usuario no encontrado.")
-                return False
 
         except mysql.connector.Error as err:
             print(f"Error al verificar el usuario: {err}")
-            return False
+        finally:
+            cursor.close()
+        return ret
+
+    #Actualziar o crear si no existe un cliente, y retorna la posición actual del cliente.
+    def insertOrUpdate_Token(self, id, token, timeExp):
+        cursor = self.connection.cursor()
+        queryUPD = """INSERT INTO TOKENS (ID, TOKEN, EXPIRATION)
+                    VALUES (%s, %s, %s)
+                    ON DUPLICATE KEY UPDATE 
+                        TOKEN = VALUES(TOKEN),
+                        EXPIRATION = VALUES(EXPIRATION)
+                        """
+        try:
+            cursor.execute(queryUPD, (id, token, timeExp))
+            
+            self.connection.commit()
+
+        except mysql.connector.Error as e:
+            print(f"Error de MySQL: {e}")        
         finally:
             cursor.close()
 
+    def verificar_token(self, token):
+        cursor = self.connection.cursor()
+        query = "SELECT ID FROM TOKENS WHERE TOKEN = %s AND EXPIRATION > NOW()"
 
+        try:
+            cursor.execute(query, (token,))
+            result = cursor.fetchone()
+        except mysql.connector.Error as e:
+            print(f"Error de MySQL: {e}")
+        finally:            
+            cursor.close()
+
+        if result is not None:
+            return result[0]
+        else:
+            return None
 
     #finaliza conexión.
     def cerrar(self):

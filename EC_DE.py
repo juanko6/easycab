@@ -6,6 +6,7 @@ import threading
 from kafka import KafkaProducer,KafkaConsumer
 import time
 import configuracion
+import DE_Secure
 
 BOOTSTRAP_SERVER = configuracion.Entorno()
 HEADER = 64
@@ -29,17 +30,17 @@ class EC_DE:
         self.producer = KafkaProducer(bootstrap_servers=bootstrap)
         
         self.running = True  # Variable para controlar el ciclo de ejecución
-        
+        self.token = None
 
     def conectar_central(self, ADDR_CENTRAL):
-        result = 0
+        result = False
         try:
             #Crear el socket
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             # Crear el contexto SSL (usando un contexto no verificado )
-#            context = ssl._create_unverified_context()
+            context = ssl._create_unverified_context()
             # Crear un contexto SSL con verificación del servidor
-            context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=cafile)
+#            context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=cafile)
 
             # Establecer la conexión sin cifrar
             client.connect(ADDR_CENTRAL)
@@ -48,25 +49,29 @@ class EC_DE:
             ssock = context.wrap_socket(client, server_hostname=ADDR_CENTRAL[0])
             print("Conexión segura establecida con la central.")
 
-            # Enviar el ID del taxi para autenticarse usando conexión cifrada
-            print(f"Enviando al servidor: Nuevo Taxi {self.ID}")
-            send(ssock, f"Nuevo Taxi {self.ID}")
+            self.token = DE_Secure.autenticar(ssock, self.ID, 'abcd')
+            if self.token:
+                result = True
 
-            msgResult = ssock.recv(2048).decode(FORMAT)
-            print(f"Respuesta de la central: {msgResult}")
+            # # Enviar el ID del taxi para autenticarse usando conexión cifrada
+            # print(f"Enviando al servidor: Nuevo Taxi {self.ID}")
+            # send(ssock, f"Nuevo Taxi {self.ID}")
 
-            result = int(msgResult)
+            # msgResult = ssock.recv(2048).decode(FORMAT)
+            # print(f"Respuesta de la central: {msgResult}")
 
-            if result == 1:
-                print("Taxi autenticado correctamente.")
-            elif result == 2:
-                print("Taxi con ID ya está autenticado.")
-            elif result == -1:
-                print("ID de Taxi no registrado.")
-            elif result == -3:
-                print("Mensaje de autenticación incorrecto.")
-            else:
-                print("Error desconocido en la autenticación del taxi.")
+            # result = int(msgResult)
+
+            # if result == 1:
+            #     print("Taxi autenticado correctamente.")
+            # elif result == 2:
+            #     print("Taxi con ID ya está autenticado.")
+            # elif result == -1:
+            #     print("ID de Taxi no registrado.")
+            # elif result == -3:
+            #     print("Mensaje de autenticación incorrecto.")
+            # else:
+            #     print("Error desconocido en la autenticación del taxi.")
 
             ssock.close()
         except Exception as e:
@@ -406,7 +411,7 @@ if len(sys.argv) == 6:
     taxi = EC_DE(ID, BOOTSTRAP_SERVER)
 
     # Si la autenticación con la central es exitosa, iniciar el proceso de estados y sensor
-    if taxi.conectar_central(ADDR_CENTRAL) > 0:
+    if taxi.conectar_central(ADDR_CENTRAL):
         # Iniciar el manejo de señales para cerrar el taxi con Ctrl+C
         signal.signal(signal.SIGINT, signal_handler)
 

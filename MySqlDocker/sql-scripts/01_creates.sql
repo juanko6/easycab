@@ -26,3 +26,9 @@ CREATE TABLE UBICACIONES (
     POS_X INT NOT NULL,                        -- Coordenadas actuales del taxi
 	POS_Y INT NOT NULL
 );
+
+CREATE TABLE TOKENS (
+    ID INT PRIMARY KEY,
+    TOKEN VARCHAR(255) NOT NULL,
+    EXPIRATION DATETIME NOT NULL
+);
