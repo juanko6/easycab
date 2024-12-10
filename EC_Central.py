@@ -30,8 +30,8 @@ FIN = "FIN"
 DB_TAXIS = "taxis_db.txt"  # Fichero que actuará como base de datos
 DB_CUSTOMERS = "customer_db.txt"  # Fichero que actuará como base de datos para customer
 
-certfile = 'certServ.pem'
-keyfile = 'certServ.pem'
+certfile = 'myCA/server.crt'
+keyfile = 'myCA/private.key'
 
 servicios_en_curso = {}  # Para trackear servicios activos
 consumer_servicios = None  # Consumer global para servicios
@@ -151,6 +151,7 @@ def iniciar_autenticacion_taxis(IP_CENTRAL, PORT_CENTRAL):
 
     # Crear un contexto SSL
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)  # Para propósito de autenticación de clientes
+    
     context.load_cert_chain(certfile=certfile, keyfile=keyfile)  # Cargar certificado y clave privada
     while True:
         conn, addr = server.accept()
@@ -160,6 +161,7 @@ def iniciar_autenticacion_taxis(IP_CENTRAL, PORT_CENTRAL):
         #thread = threading.Thread(target=nuevo_taxi, args=(conn_ssl, addr))
         thread = threading.Thread(target=autenticar_taxi_token, args=(conn_ssl, addr))
         thread.start()
+            
 
 #####
 ########## COMUNICACION TAXIS ##########

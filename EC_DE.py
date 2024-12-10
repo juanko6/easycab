@@ -14,7 +14,7 @@ FORMAT = 'utf-8'
 FIN = "FIN"
 MAPA_DIM = 20  # Dimensión del mapa (20x20)
 
-cafile = 'certServ_DE.pem'
+cafile = 'myCA/server.crt'
 
 class EC_DE:
     def __init__(self, ID, bootstrap):        
@@ -38,16 +38,15 @@ class EC_DE:
             #Crear el socket
             client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             # Crear el contexto SSL (usando un contexto no verificado )
-            context = ssl._create_unverified_context()
+#            context = ssl._create_unverified_context()
             # Crear un contexto SSL con verificación del servidor
-#            context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=cafile)
-
-            # Establecer la conexión sin cifrar
-            client.connect(ADDR_CENTRAL)
-            print(f"Conexión establecida con la central en {ADDR_CENTRAL}")
+            context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=cafile)
+            context.check_hostname = False
+            
             # Envolver la conexión con TLS
             ssock = context.wrap_socket(client, server_hostname=ADDR_CENTRAL[0])
-            print("Conexión segura establecida con la central.")
+            ssock.connect(ADDR_CENTRAL)
+            print(f"Conexión segura establecida con la central en {ADDR_CENTRAL}")
 
             self.token = DE_Secure.autenticar(ssock, self.ID, 'abcd')
             if self.token:

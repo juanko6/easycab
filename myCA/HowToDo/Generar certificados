@@ -1,0 +1,9 @@
+En Ubuntu
+##Generar clave privada
+openssl genpkey -algorithm RSA -out private.key
+
+##Generar petición de firma
+openssl req -new -key private.key -out server.csr
+
+##Generar certificado firmado
+openssl x509 -req -days 365 -in server.csr -signkey private.key -out server.crt
