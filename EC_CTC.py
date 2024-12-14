@@ -71,4 +71,4 @@ def verificar_trafico():
 
 # Servidor Flask
 if __name__ == "__main__":
-    app.run(host="192.168.1.141", port=5001, debug=True)
+    app.run(host="192.168.1.140", port=5001, debug=True)
