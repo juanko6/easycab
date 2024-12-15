@@ -434,6 +434,10 @@ if len(sys.argv) == 7:
         hilo_escuchar_asignaciones = threading.Thread(target=taxi.escuchar_asignaciones, daemon=True)
         hilo_escuchar_asignaciones.start()
 
+        # Crear hilo para escuchar comandos de servicio de la central
+        hilo_escuchar_comandos = threading.Thread(target=taxi.escuchar_comandos, daemon=True)
+        hilo_escuchar_comandos.start()
+
         # Mantener el proceso activo
         while True:
             time.sleep(1)
