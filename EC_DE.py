@@ -32,7 +32,7 @@ class EC_DE:
         self.running = True  # Variable para controlar el ciclo de ejecución
         self.token = None
 
-    def conectar_central(self, ADDR_CENTRAL):
+    def conectar_central(self, ADDR_CENTRAL, password):
         result = False
         try:
             #Crear el socket
@@ -48,7 +48,7 @@ class EC_DE:
             ssock.connect(ADDR_CENTRAL)
             print(f"Conexión segura establecida con la central en {ADDR_CENTRAL}")
 
-            self.token = DE_Secure.autenticar(ssock, self.ID, 'abcd')
+            self.token = DE_Secure.autenticar(ssock, self.ID, password)
             if self.token:
                 result = True
 
@@ -397,20 +397,21 @@ def signal_handler(sig, frame):
         server_socket.close()  # Cerrar el socket del servidor para desbloquear el accept()
     sys.exit(0)  # Terminar el programa
 
-if len(sys.argv) == 6:
+if len(sys.argv) == 7:
     SERVER_CENTRAL = sys.argv[1]
     PORT_CENTRAL = int(sys.argv[2])
     ADDR_CENTRAL = (SERVER_CENTRAL, PORT_CENTRAL)
     ID = int(sys.argv[3])
 
     SENSOR_IP = sys.argv[4]  # IP del sensor (EC_S)
-    SENSOR_PORT = int(sys.argv[5])  # Puerto del sensor (EC_S)    
+    SENSOR_PORT = int(sys.argv[5])  # Puerto del sensor (EC_S)
+    PASSWORD = sys.argv[6]
 
     # Crear el taxi
     taxi = EC_DE(ID, BOOTSTRAP_SERVER)
 
     # Si la autenticación con la central es exitosa, iniciar el proceso de estados y sensor
-    if taxi.conectar_central(ADDR_CENTRAL):
+    if taxi.conectar_central(ADDR_CENTRAL, PASSWORD):
         # Iniciar el manejo de señales para cerrar el taxi con Ctrl+C
         signal.signal(signal.SIGINT, signal_handler)
 

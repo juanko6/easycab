@@ -428,10 +428,17 @@ class ECCentral:
                     for cliente in clientes_resultados
                 ]
 
+
+                # Leer el archivo EC_locations.json para cargar las ubicaciones
+                with open('./EC_locations/EC_locations.json', 'r') as file:
+                    ubicaciones_data = json.load(file)
+                    ubicaciones = [{"id": u['Id'], "posicion": list(map(int, u['POS'].split(',')))} for u in ubicaciones_data['locations']]
+
                 # Retornar los datos en formato JSON
                 return {
                     "taxis": taxis,
-                    "clientes": clientes
+                    "clientes": clientes,
+                    "ubicaciones": ubicaciones
                 }, 200
 
             except Exception as e:

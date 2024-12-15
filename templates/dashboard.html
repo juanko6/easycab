@@ -3,12 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - EasyCab</title>
+    <title>Dashboard</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            overflow-x: hidden; /* Evitar scroll horizontal */
         }
+
         h1 {
             text-align: center;
             margin-bottom: 20px;
@@ -40,14 +44,24 @@
         }
         #mapa {
             display: grid;
-            grid-template-columns: repeat(20, 30px); 
-            grid-template-rows: repeat(20, 30px); 
+            grid-template-columns: repeat(20, 20px); 
+            grid-template-rows: repeat(20, 20px); 
             gap: 1px;
             margin: 0 auto; 
         }
+        .ubicacion {
+            background-color: rgb(93, 0, 255);
+            border-radius: 50%;
+            color: rgb(0, 0, 0); /* Hacer el texto visible */
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
         .celda {
-            width: 30px;
-            height: 30px;
+            width: 20px;
+            height: 20px;
             border: 1px solid black; 
             text-align: center;
             vertical-align: middle;
@@ -71,17 +85,105 @@
         .header .city-info span {
             display: block;
         }
+
+
+
+
+
+
+
+
+
+        .tabs {
+            display: flex;
+            background-color: #4CAF50;
+        }
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 14px 16px;
+            cursor: pointer;
+            color: white;
+            font-weight: bold;
+        }
+        .tab:hover {
+            background-color: #45a049;
+        }
+        .tab.active {
+            background-color: #2e7031;
+        }
+        .content {
+            display: none;
+            padding: 20px;
+        }
+        .content.active {
+            display: block;
+        }
+        .container {
+            max-width: 950px; /* Aumentar el ancho máximo */
+            margin: 0 auto;    /* Centrar el contenedor */
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Dashboard - EasyCab</h1>
+    <div class="tabs">
+        <div class="tab active" onclick="openTab(event, 'dashboard')">Dashboard</div>
+        <div class="tab" onclick="openTab(event, 'gestion-taxis')">Gestión de Taxis</div>
+    </div>
+
+    <div id="dashboard" class="content active">
+        <div class="container">
+            <h1>Dashboard - EasyCab</h1>
         <div class="city-info">
             <span><strong>Ciudad:</strong> <span id="ciudad">Alicante</span></span>
             <span><strong>Temperatura:</strong> <span id="temperatura">12°C</span></span>
             <span><strong>Estado del Trafico:</strong> <span id="estado">KO</span></span>
         </div>
-    </div>
+    
 
     <div class="dashboard">
         <div class="info-panel">
@@ -129,6 +231,44 @@
             <div id="mapa"></div>
         </div>
     </div>
+        </div>
+    </div>
+
+    <div id="gestion-taxis" class="content">
+        <div class="container">
+            <h1>Gestión de Taxis</h1>
+
+            <!-- Formulario para registrar un nuevo taxi -->
+            <h2>Registrar un nuevo taxi</h2>
+            <div class="form-group">
+                <label for="taxi_id">ID del Taxi</label>
+                <input type="number" id="taxi_id" placeholder="Ingrese el ID del taxi">
+            </div>
+            <div class="form-group">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" placeholder="Ingrese la contraseña">
+            </div>
+            <button onclick="registrarTaxi()">Registrar Taxi</button>
+
+            <!-- Listado de taxis registrados -->
+            <h2>Listado de Taxis</h2>
+            <table id="taxis-table">
+                <thead>
+                    <tr>
+                        <th>ID Taxi</th>
+                        <th>Pos X</th>
+                        <th>Pos Y</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Aquí se insertarán los registros de taxis -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
     <script>
         document.getElementById("form-actualizar-ciudad").addEventListener("submit", function(event) {
@@ -159,7 +299,7 @@
                 .then(response => response.json())
                 .then(data => {
                     actualizarTablas(data.taxis, data.clientes);
-                    actualizarMapa(data.taxis, data.clientes);
+                    actualizarMapa(data.taxis, data.clientes, data.ubicaciones);
                 })
                 .catch(error => console.error("Error al obtener los datos del dashboard:", error));
         }
@@ -198,7 +338,7 @@
             });
         }
 
-        function actualizarMapa(taxis, clientes) {
+        function actualizarMapa(taxis, clientes, ubicaciones) {
             const mapa = document.getElementById("mapa");
 
             // Limpiar mapa
@@ -209,12 +349,17 @@
                     const celda = document.createElement("div");
                     celda.classList.add("celda");
 
-                    // Verificar si hay un taxi o cliente en la posición
+                    // Verificar si hay un taxi, cliente o ubicación en la posición
                     const taxi = taxis.find(t => t.posicion[0] === x && t.posicion[1] === y);
                     const cliente = clientes.find(c => c.posicion[0] === x && c.posicion[1] === y);
+                    const ubicacion = ubicaciones.find(u => u.posicion[0] === x && u.posicion[1] === y);
 
                     if (taxi) celda.classList.add("taxi");
                     if (cliente) celda.classList.add("cliente");
+                    if (ubicacion) {
+                        celda.classList.add("ubicacion");
+                        celda.textContent = ubicacion.id; // Mostrar el ID de la ubicación en la celda
+                    }
 
                     mapa.appendChild(celda);
                 }
@@ -236,10 +381,91 @@
 
         // Actualizar el dashboard cada 2 segundos
         setInterval(actualizarCiudadInfo, 2000)
-        setInterval(actualizarDashboard, 2000);
+        setInterval(actualizarDashboard, 1000);
 
         // Inicializar el dashboard al cargar la página
         actualizarDashboard();
+
+
+
+
+
+
+
+        function openTab(event, tabName) {
+            const tabs = document.querySelectorAll('.tab');
+            const contents = document.querySelectorAll('.content');
+
+            tabs.forEach(tab => tab.classList.remove('active'));
+            contents.forEach(content => content.classList.remove('active'));
+
+            event.currentTarget.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            listarTaxis();
+        });
+
+        function registrarTaxi() {
+            const taxi_id = document.getElementById('taxi_id').value;
+            const password = document.getElementById('password').value;
+
+            if (!taxi_id || !password) {
+                alert('Debe ingresar ID de Taxi y contraseña');
+                return;
+            }
+
+            fetch('http://192.168.1.140:5002/api/registry/alta', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_taxi: taxi_id, password: password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.mensaje || data.error);
+                listarTaxis();
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function listarTaxis() {
+            fetch('http://192.168.1.140:5002/api/registry/listar')
+            .then(response => response.json())
+            .then(data => {
+                const taxisTable = document.getElementById('taxis-table').getElementsByTagName('tbody')[0];
+                taxisTable.innerHTML = '';
+
+                data.taxis.forEach(taxi => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${taxi.id_taxi}</td>
+                        <td>${taxi.pos_x}</td>
+                        <td>${taxi.pos_y}</td>
+                        <td>${taxi.estado}</td>
+                        <td><button onclick="eliminarTaxi(${taxi.id_taxi})">Eliminar</button></td>
+                    `;
+                    taxisTable.appendChild(row);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function eliminarTaxi(taxi_id) {
+            if (!confirm(`¿Está seguro de que desea eliminar el taxi ${taxi_id}?`)) {
+                return;
+            }
+
+            fetch(`http://192.168.1.140:5002/api/registry/baja/${taxi_id}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.mensaje || data.error);
+                listarTaxis();
+            })
+            .catch(error => console.error('Error:', error));
+        }
     </script>
 </body>
 </html>

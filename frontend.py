@@ -19,7 +19,8 @@ def dashboard():
             return render_template(
                 "dashboard.html",
                 taxis=data.get("taxis", {}),
-                clientes=data.get("clientes", {})
+                clientes=data.get("clientes", {}),
+                ubicaciones=data.get("ubicaciones", {}) 
             )
         else:
             return f"Error al obtener datos del backend: {response.status_code}", 500

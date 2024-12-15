@@ -15,7 +15,7 @@ class MiSQL():
 
         self.pool = pooling.MySQLConnectionPool(
             pool_name="sensor_pool",
-            pool_size=50,  # Tamaño del pool de conexiones
+            pool_size=32,  # Tamaño del pool de conexiones
             **config
         )
 
