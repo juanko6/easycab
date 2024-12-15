@@ -4,7 +4,7 @@ import requests
 app = Flask(__name__, template_folder="templates")
 
 # URL del backend central
-BACKEND_URL = "http://192.168.24.1:5000"
+BACKEND_URL = "http://192.168.1.140:5000"
 
 @app.route('/')
 def dashboard():
@@ -28,4 +28,4 @@ def dashboard():
 
 
 if __name__ == "__main__":
-    app.run(host="192.168.1.141", port=5500, debug=True)
+    app.run(host="192.168.1.140", port=5500, debug=True)

@@ -5,10 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - EasyCab</title>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 2fr 3fr;
+            gap: 20px;
+            align-items: start;
+        }
+        .info-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
         table {
             border-collapse: collapse;
             width: 100%;
-            margin-bottom: 20px;
         }
         table, th, td {
             border: 1px solid black;
@@ -17,18 +35,24 @@
             padding: 8px;
             text-align: center;
         }
+        .map-panel {
+            text-align: center;
+        }
         #mapa {
             display: grid;
-            grid-template-columns: repeat(20, 1fr);
-            grid-template-rows: repeat(20, 1fr);
+            grid-template-columns: repeat(20, 30px); 
+            grid-template-rows: repeat(20, 30px); 
             gap: 1px;
-            background-color: lightgray;
+            margin: 0 auto; 
         }
         .celda {
             width: 30px;
             height: 30px;
+            border: 1px solid black; 
             text-align: center;
             vertical-align: middle;
+            background-color: white; 
+            position: relative; 
         }
         .taxi {
             background-color: yellow;
@@ -36,90 +60,83 @@
         .cliente {
             background-color: blue;
         }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .header .city-info {
+            text-align: right;
+        }
+        .header .city-info span {
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <h1>Dashboard - EasyCab</h1>
-
-    <h2>Taxis</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Taxi ID</th>
-                <th>Posición</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for taxi in taxis %}
-            <tr>
-                <td>{{ taxi.id }}</td>
-                <td>{{ taxi.posicion }}</td>
-                <td>{{ taxi.estado }}</td>
-                <td>{{ "Conectado" if taxi.conectado else "Desconectado" }}</td>
-                <td>{{ taxi.cliente_asociado if taxi.cliente_asociado else "Ninguno" }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        
-    </table>
-
-    <h2>Clientes</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Cliente ID</th>
-                <th>Destino</th>
-                <th>Estado</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for cliente in clientes %}
-            <tr>
-                <td>{{ cliente.id }}</td>
-                <td>{{ cliente.destino }}</td>
-                <td>{{ cliente.estado }}</td>
-                <td>{{ cliente.posicion }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-        
-    </table>
-
-    <h2>Mapa</h2>
-    <div id="mapa">
-        {% for y in range(20) %}
-        {% for x in range(20) %}
-        <div class="celda {% if [x, y] in taxis_positions %}taxi{% elif [x, y] in clientes_positions %}cliente{% endif %}">
-            {% if [x, y] in taxis_positions %}🚕{% elif [x, y] in clientes_positions %}👤{% endif %}
+    <div class="header">
+        <h1>Dashboard - EasyCab</h1>
+        <div class="city-info">
+            <span><strong>Ciudad:</strong> <span id="ciudad">Alicante</span></span>
+            <span><strong>Temperatura:</strong> <span id="temperatura">12°C</span></span>
+            <span><strong>Estado del Trafico:</strong> <span id="estado">KO</span></span>
         </div>
-        {% endfor %}
-        {% endfor %}
     </div>
 
-    <h2>Actualizar Ciudad</h2>
-    <form id="form-actualizar-ciudad">
-        <label for="ciudad">Nueva Ciudad:</label>
-        <input type="text" id="ciudad" name="ciudad" placeholder="Ingrese el nombre de la ciudad">
-        <button type="submit">Actualizar</button>
-    </form>
-    <p id="resultado-actualizacion"></p>
-    <button onclick="fetch('/api/taxis/base', {method: 'POST'})">Enviar Todos a Base</button>
+    <div class="dashboard">
+        <div class="info-panel">
+            <div>
+                <h2>Taxis</h2>
+                <table id="tabla-taxis">
+                    <thead>
+                        <tr>
+                            <th>Taxi ID</th>
+                            <th>Posición</th>
+                            <th>Estado</th>
+                            <th>Conectado</th>
+                            <th>Cliente Asociado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+            <div>
+                <h2>Clientes</h2>
+                <table id="tabla-clientes">
+                    <thead>
+                        <tr>
+                            <th>Cliente ID</th>
+                            <th>Destino</th>
+                            <th>Estado</th>
+                            <th>Posición</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="map-panel">
+            <h2>Mapa</h2>
+            <form id="form-actualizar-ciudad">
+                <label for="newciudad">Nueva Ciudad:</label>
+                <input type="text" id="newciudad" name="newciudad" placeholder="Ingrese el nombre de la ciudad">
+                <button type="submit">Actualizar</button>
+            </form>
+            <p id="resultado-actualizacion"></p>
+            <div id="mapa"></div>
+        </div>
+    </div>
 
     <script>
-        // Capturar el evento de envío del formulario
         document.getElementById("form-actualizar-ciudad").addEventListener("submit", function(event) {
-            event.preventDefault(); // Evitar que el formulario recargue la página
-    
-            // Obtener el valor de la ciudad
-            const ciudad = document.getElementById("ciudad").value;
-    
-            // Realizar la solicitud Fetch al backend central
-            fetch("http://127.0.0.1:5000/api/ciudad", {
+            event.preventDefault();
+            const ciudad = document.getElementById("newciudad").value;
+            fetch("http://192.168.1.140:5000/api/ciudad", {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ ciudad: ciudad })
             })
             .then(response => response.json())
@@ -131,28 +148,98 @@
                 } else {
                     resultado.textContent = `Ciudad actualizada: ${data.message}`;
                     resultado.style.color = "green";
-    
-                    // Actualizar dinámicamente la tabla de datos si es necesario
                     actualizarDashboard();
                 }
             })
-            .catch(error => {
-                console.error("Error al actualizar la ciudad:", error);
-            });
+            .catch(error => console.error("Error al actualizar la ciudad:", error));
         });
-    
-        // Función para actualizar dinámicamente el dashboard
+
         function actualizarDashboard() {
-            fetch("http://127.0.0.1:5000/api/dashboard-data")
+            fetch("http://192.168.1.140:5000/api/dashboard-data")
                 .then(response => response.json())
                 .then(data => {
-                    // Aquí puedes actualizar dinámicamente el contenido de las tablas de taxis y clientes
-                    console.log("Datos actualizados del backend:", data);
+                    actualizarTablas(data.taxis, data.clientes);
+                    actualizarMapa(data.taxis, data.clientes);
                 })
-                .catch(error => {
-                    console.error("Error al obtener los datos del dashboard:", error);
-                });
+                .catch(error => console.error("Error al obtener los datos del dashboard:", error));
         }
+
+        function actualizarTablas(taxis, clientes) {
+            const tablaTaxis = document.querySelector("#tabla-taxis tbody");
+            const tablaClientes = document.querySelector("#tabla-clientes tbody");
+
+            // Limpiar tablas
+            tablaTaxis.innerHTML = "";
+            tablaClientes.innerHTML = "";
+
+            // Actualizar taxis
+            taxis.forEach(taxi => {
+                const fila = document.createElement("tr");
+                fila.innerHTML = `
+                    <td>${taxi.id}</td>
+                    <td>${taxi.posicion}</td>
+                    <td>${taxi.estado}</td>
+                    <td>${taxi.conectado ? "Conectado" : "Desconectado"}</td>
+                    <td>${taxi.cliente_asociado || "Ninguno"}</td>
+                `;
+                tablaTaxis.appendChild(fila);
+            });
+
+            // Actualizar clientes
+            clientes.forEach(cliente => {
+                const fila = document.createElement("tr");
+                fila.innerHTML = `
+                    <td>${cliente.id}</td>
+                    <td>${cliente.destino}</td>
+                    <td>${cliente.estado}</td>
+                    <td>${cliente.posicion}</td>
+                `;
+                tablaClientes.appendChild(fila);
+            });
+        }
+
+        function actualizarMapa(taxis, clientes) {
+            const mapa = document.getElementById("mapa");
+
+            // Limpiar mapa
+            mapa.innerHTML = "";
+
+            for (let y = 0; y < 20; y++) {
+                for (let x = 0; x < 20; x++) {
+                    const celda = document.createElement("div");
+                    celda.classList.add("celda");
+
+                    // Verificar si hay un taxi o cliente en la posición
+                    const taxi = taxis.find(t => t.posicion[0] === x && t.posicion[1] === y);
+                    const cliente = clientes.find(c => c.posicion[0] === x && c.posicion[1] === y);
+
+                    if (taxi) celda.classList.add("taxi");
+                    if (cliente) celda.classList.add("cliente");
+
+                    mapa.appendChild(celda);
+                }
+            }
+        }
+
+        function actualizarCiudadInfo() {
+        fetch("http://192.168.1.140:5000/api/ciudad-info")
+            .then(response => response.json())
+            .then(data => {
+                if (!data.error) {
+                    document.getElementById("ciudad").textContent = data.ciudad;
+                    document.getElementById("temperatura").textContent = `${data.temperatura}°C`;
+                    document.getElementById("estado").textContent = data.estado;
+                }
+            })
+            .catch(error => console.error("Error al actualizar la información de la ciudad:", error));
+    }
+
+        // Actualizar el dashboard cada 2 segundos
+        setInterval(actualizarCiudadInfo, 2000)
+        setInterval(actualizarDashboard, 2000);
+
+        // Inicializar el dashboard al cargar la página
+        actualizarDashboard();
     </script>
 </body>
 </html>

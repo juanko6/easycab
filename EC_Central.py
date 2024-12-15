@@ -12,8 +12,9 @@ import json
 import miSQL
 from flask import Flask, request, jsonify, render_template
 import Central_Secure
+from flask_cors import CORS
 
-URL_EC_CTC = "http://192.168.1.141:5001/traffic"  # Cambia la IP si EC_CTC está en otro servidor
+URL_EC_CTC = "http://192.168.1.140:5001/traffic"  # Cambia la IP si EC_CTC está en otro servidor
 CIUDAD_SERVICIO = "Alicante"  # Ciudad donde opera el servicio
 
 # Intervalo de consulta a EC_CTC (en segundos)
@@ -391,7 +392,8 @@ class ECCentral:
         self.app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "templates"))  # Inicializar Flask
         self.configurar_endpoints()  # Configurar los endpoints REST
 
-
+        
+        CORS(self.app, resources={r"/api/*": {"origins": "*"}})
 
     def configurar_endpoints(self):
 
@@ -504,6 +506,22 @@ class ECCentral:
             CIUDAD_SERVICIO = nueva_ciudad
             self.estado_trafico = self.consultar_trafico()
             return jsonify({"message": f"Ciudad cambiada a {CIUDAD_SERVICIO}", "trafico": self.estado_trafico}), 200
+        
+        @self.app.route('/api/ciudad-info', methods=['GET'])
+        def obtener_ciudad_info():
+            """
+            Devuelve la información de la ciudad y la temperatura actual.
+            """
+            try:
+                return jsonify({
+                    "ciudad": self.ciudad,
+                    "temperatura": self.temperatura,
+                    "estado": self.estado_trafico
+                }), 200
+            except Exception as e:
+                print(f"[ERROR] Al obtener la información de la ciudad: {e}")
+                return jsonify({"error": "Error al obtener la información de la ciudad"}), 500
+
 
 
     def consultar_trafico(self):
@@ -523,11 +541,25 @@ class ECCentral:
 
             # Parsear la respuesta JSON
             datos = json.loads(result.stdout)
+
+
+
+            # Almacenar las variables "estado_trafico", "ciudad" y "temperatura"
             self.estado_trafico = datos.get("estado_trafico", "KO")
+            self.ciudad = datos.get("ciudad", "Desconocida")
+            self.temperatura = datos.get("temperatura", "No disponible")
+
+
             print(f"[INFO] Estado del tráfico: {self.estado_trafico}")
+            print(f"[INFO] Ciudad: {self.ciudad}")
+            print(f"[INFO] Temperatura: {self.temperatura}°C")
+
+
         except Exception as e:
             print(f"[ERROR] Al consultar EC_CTC: {e}")
             self.estado_trafico = "KO"
+            self.ciudad = "Desconocida"
+            self.temperatura = "No disponible"
 
     def verificar_trafico_periodicamente(self):
         """Consulta el tráfico periódicamente y actualiza el estado en el sistema."""
@@ -604,4 +636,4 @@ if __name__ == "__main__":
     # Hilo comprobar conexión taxis
     checkConexionTaxi()
 
-    central.app.run(host="0.0.0.0", port=5000, debug=False)
+    central.app.run(host="192.168.1.140", port=5000, debug=False)
