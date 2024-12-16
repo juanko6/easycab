@@ -41,21 +41,16 @@ def eliminar_taxi(taxi_id):
     Endpoint para dar de baja a un taxi de la base de datos.
     """
     try:
-        # Eliminar el taxi de la base de datos
-        query = "DELETE FROM TAXI WHERE ID_TAXI = %s"
-        cursor = sql.connection.cursor()
-        cursor.execute(query, (taxi_id,))
-        sql.connection.commit()
-        cursor.close()
+        resultado = sql.eliminar_taxi(taxi_id)
 
-        if cursor.rowcount > 0:
-            return jsonify({"mensaje": f"Taxi {taxi_id} eliminado correctamente."}), 200
+        if resultado["success"]:
+            return jsonify({"mensaje": resultado["message"]}), 200
         else:
-            return jsonify({"error": f"Taxi {taxi_id} no encontrado."}), 404
+            return jsonify({"error": resultado["message"]}), 404
 
     except Exception as e:
-        print(f"[ERROR] Error al eliminar el taxi: {e}")
-        return jsonify({"error": "Error interno del servidor"}), 500
+        print(f"[ERROR] Error al eliminar el taxi {taxi_id}: {str(e)}")
+        return jsonify({"error": f"Error interno del servidor: {str(e)}"}), 500
 
 
 @app.route('/api/registry/listar', methods=['GET'])

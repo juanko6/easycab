@@ -60,7 +60,10 @@ def verificar_trafico():
 
     # Obtener la temperatura y determinar el estado del tráfico
     temperatura = datos_clima["main"]["temp"]
-    estado_trafico = "OK" if temperatura >= 0 else "KO"
+    if temperatura < 0:
+        estado_trafico = "KO"
+    else:
+        estado_trafico = "OK"
 
     # Respuesta al cliente
     return jsonify({

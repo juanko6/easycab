@@ -459,12 +459,20 @@
             fetch(`http://192.168.1.140:5002/api/registry/baja/${taxi_id}`, {
                 method: 'DELETE'
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 alert(data.mensaje || data.error);
                 listarTaxis();
             })
-            .catch(error => console.error('Error:', error));
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al eliminar el taxi: ' + error.message);
+            });
         }
     </script>
 </body>

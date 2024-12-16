@@ -366,7 +366,8 @@ class ECCentral:
         self.ciudad = CIUDAD_SERVICIO
         self.app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "templates"))  # Inicializar Flask
         self.configurar_endpoints()  # Configurar los endpoints REST
-
+        self.temperatura = "No disponible"
+        self.estado_anterior = "OK"
         
         CORS(self.app, resources={r"/api/*": {"origins": "*"}})
 
@@ -519,17 +520,16 @@ class ECCentral:
 
             if result.returncode != 0:
                 print(f"[ERROR] No se pudo conectar con EC_CTC: {result.stderr}")
+                self.estado_trafico = "KO"
                 return
 
             # Parsear la respuesta JSON
-            datos = json.loads(result.stdout)
-
-
+            datos_clima = json.loads(result.stdout)
 
             # Almacenar las variables "estado_trafico", "ciudad" y "temperatura"
-            self.estado_trafico = datos.get("estado_trafico", "KO")
-            self.ciudad = datos.get("ciudad", "Desconocida")
-            self.temperatura = datos.get("temperatura", "No disponible")
+            self.estado_trafico = datos_clima.get("estado_trafico", "KO")
+            self.ciudad = datos_clima.get("ciudad", "Desconocida")
+            self.temperatura = datos_clima.get("temperatura", "No disponible")
 
 
             print(f"[INFO] Estado del tráfico: {self.estado_trafico}")
@@ -547,9 +547,10 @@ class ECCentral:
         """Consulta el tráfico periódicamente y actualiza el estado en el sistema."""
         while True:
             self.consultar_trafico()
-            if self.estado_trafico == "KO":
+            if self.estado_trafico == "KO" and self.estado_anterior != "KO":
                 print("[ALERTA] Tráfico no viable. Notificando a los taxis.")
                 self.enviar_todos_a_base()
+            self.estado_anterior = self.estado_trafico
             time.sleep(INTERVALO_CONSULTA)
 
     def enviar_comando_taxi(self, taxi_id, posicion):
