@@ -255,7 +255,7 @@ def inicializar_consumer_servicios():
 def subscribir_a_servicio_taxi(taxi_id):
     #Suscribe el consumidor global a un nuevo topic de servicio de taxi
     topic = f"ST_{taxi_id}"    
-    print(f"Subsicrito a : {consumer_servicios.subscription()}")
+    print(f"Suscrito a : {consumer_servicios.subscription()}")
     if(consumer_servicios.subscription()):
         current_topics = set(consumer_servicios.subscription())
     else:
@@ -422,9 +422,9 @@ class ECCentral:
                 clientes = [
                     {
                         "id": cliente[0],  # ID_CLIENTE
-                        "destino": [cliente[1], cliente[2]],  # DES_X, DES_Y
+                        "destino": [cliente[2], cliente[1]],  # DES_X, DES_Y
                         "estado": cliente[3],  # ESTADO
-                        "posicion": [cliente[4], cliente[5]]  # POS_X, POS_Y
+                        "posicion": [cliente[5], cliente[4]]  # POS_X, POS_Y
                     }
                     for cliente in clientes_resultados
                 ]
@@ -560,6 +560,7 @@ class ECCentral:
         self.producer.send(topic_taxi, value=mensaje.encode('utf-8'))
         self.producer.flush()
         print(f"[INFO] Comando enviado a {topic_taxi}: {mensaje}")
+        
 
     def enviar_todos_a_base(self):
         """
@@ -567,7 +568,7 @@ class ECCentral:
         """
         #taxis_disponibles = self.dashboard.taxis.keys()  # IDs de los taxis registrados
         for taxi_id in taxis_autenticados:
-            self.enviar_comando_taxi(taxi_id, (1, 1))
+            self.enviar_comando_taxi(taxi_id, (0, 0))
         print("[INFO] Todos los taxis enviados a la base.")
 #####
 ########## MAIN ##########

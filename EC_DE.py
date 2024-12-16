@@ -21,13 +21,15 @@ class EC_DE:
         print(f"***** [EC_DE] ***** Iniciando Taxi ID: {ID} con Kafka en {bootstrap}")
         self.ID = ID
         self.estado = "esperandoSensor"  # Estado inicial del taxi
-        self.posicion = [0, 0]  # Inicializar la posición del taxi en (1,1)
+        self.posicion = [10, 10]  # Inicializar la posición del taxi en (1,1)
         self.topic = f"TAXI_{self.ID}"
         self.sensor_conectado = False  # Estado de conexión del sensor
 
         # Crear Kafka Producer para enviar actulizaciones de estado y posición
         print("Iniciando productor Kafka")
         self.producer = KafkaProducer(bootstrap_servers=bootstrap)
+        print(f"[INFO] Taxi {self.ID} escuchando comandos en {self.topic}")
+
         
         self.running = True  # Variable para controlar el ciclo de ejecución
         self.token = None
@@ -77,25 +79,64 @@ class EC_DE:
             print(f"Error al conectar con la central: {e}")
 
         return result
-
+    
     def escuchar_asignaciones(self):
         """Escuchar asignaciones de servicios y procesarlas"""
         consumer = KafkaConsumer(
-            f"TAXI_{self.ID}",
+            self.topic,
             bootstrap_servers=BOOTSTRAP_SERVER,
-            auto_offset_reset='earliest',
+            auto_offset_reset='latest',
             enable_auto_commit=True,
             group_id=f'group_{self.ID}'
         )
-        print(f"[EC_DE] Taxi {self.ID} escuchando asignaciones en topic TAXI_{self.ID}")
+        print(f"[INFO] Taxi {self.ID} escuchando mensajes en {self.topic}")
 
         for mensaje in consumer:
-            servicio = mensaje.value.decode('utf-8')
-            if ";" in servicio:
-                ubicacion_cliente, destino = servicio.split(';')
+            contenido  = mensaje.value.decode('utf-8')
+            print(f"[INFO] Taxi {self.ID} recibió mensaje: {contenido}")
+
+            # Comprobar si el mensaje es un comando
+            if contenido.startswith("MOVER:"):
+                print(f"[INFO] Taxi {self.ID} recibió comando: {contenido}")
+                print(f"[DEBUG] Mensaje recibido del topic {self.topic}: {mensaje.value.decode('utf-8')}")
+                print(f"[INFO] Procesando comando MOVER para Taxi {self.ID}")
+                _, coords = contenido.split(":")
+                x, y = map(int, coords.split(","))
+                
+                # Ejecutar mover_hacia(x, y) en un hilo separado
+                hilo_mover = threading.Thread(target=self.mover_hacia, args=(x, y))
+                hilo_mover.start()
+                
+
+
+            # Comprobar si el mensaje es una asignación de servicio
+            elif ";" in contenido:
+                print(f"[INFO] Procesando asignación de servicio para Taxi {self.ID}")
+                ubicacion_cliente, destino = contenido.split(';')
                 print(f"[EC_DE] Taxi {self.ID} recibió servicio: Ubicación Cliente {ubicacion_cliente}, Destino {destino}")
                 consumer.commit()
                 self.recibir_servicio(ubicacion_cliente, destino)
+
+    # def escuchar_asignaciones(self):
+    #     """Escuchar asignaciones de servicios y procesarlas"""
+    #     consumer = KafkaConsumer(
+    #         f"TAXI_{self.ID}",
+    #         bootstrap_servers=BOOTSTRAP_SERVER,
+    #         auto_offset_reset='earliest',
+    #         enable_auto_commit=True,
+    #         group_id=f'group_{self.ID}'
+    #     )
+    #     print(f"[EC_DE] Taxi {self.ID} escuchando asignaciones en topic TAXI_{self.ID}")
+
+    #     for mensaje in consumer:
+    #         servicio = mensaje.value.decode('utf-8')
+    #         if ";" in servicio:
+    #             ubicacion_cliente, destino = servicio.split(';')
+    #             print(f"[EC_DE] Taxi {self.ID} recibió servicio: Ubicación Cliente {ubicacion_cliente}, Destino {destino}")
+    #             consumer.commit()
+    #             self.recibir_servicio(ubicacion_cliente, destino)
+
+    
 
     def recibir_servicio(self, ubicacion_cliente, destino):
         """Mover el taxi hacia la ubicación del cliente y luego al destino"""
@@ -150,7 +191,6 @@ class EC_DE:
         self.producer.flush()
         print(f'Enviando SERVICIO: {mensaje}')
 
-    
     # Función que actualiza el estado del taxi basado en el sensor
     def actualizar_estado(self):
         while self.running:
@@ -171,25 +211,6 @@ class EC_DE:
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
             time.sleep(1)
 
-    def escuchar_comandos(self):
-        """
-        Escucha comandos en el topic del taxi y los procesa.
-        """
-        consumer = KafkaConsumer(
-            self.topic,
-            bootstrap_servers=BOOTSTRAP_SERVER,
-            auto_offset_reset='earliest',
-            enable_auto_commit=True,
-            group_id=f'group_{self.ID}'
-        )
-        print(f"[INFO] Taxi {self.ID} escuchando comandos en {self.topic}")
-        for mensaje in consumer:
-            comando = mensaje.value.decode('utf-8')
-            print(f"[INFO] Taxi {self.ID} recibió comando: {comando}")
-            if comando.startswith("MOVER:"):
-                _, coords = comando.split(":")
-                x, y = map(int, coords.split(","))
-                self.mover_hacia(x, y)
 
     def mover_hacia(self, dest_x, dest_y):
         """
@@ -434,9 +455,6 @@ if len(sys.argv) == 7:
         hilo_escuchar_asignaciones = threading.Thread(target=taxi.escuchar_asignaciones, daemon=True)
         hilo_escuchar_asignaciones.start()
 
-        # Crear hilo para escuchar comandos de servicio de la central
-        hilo_escuchar_comandos = threading.Thread(target=taxi.escuchar_comandos, daemon=True)
-        hilo_escuchar_comandos.start()
 
         # Mantener el proceso activo
         while True:
