@@ -33,7 +33,7 @@ class Customer ():
     def iniciar_ubicacion(self):
         fila = random.randint(0, MAPA_FILAS - 1)
         columna = random.randint(0, MAPA_COLUMNAS - 1)
-        ubicacion = (columna, fila)
+        ubicacion = (fila, columna)
         # if ubicacion not in ubicaciones_ocupadas: //Permitimos que dos clientes puedan estar en la misma ubicación.
         return ubicacion
 

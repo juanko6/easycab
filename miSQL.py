@@ -15,7 +15,7 @@ class MiSQL():
 
         self.pool = pooling.MySQLConnectionPool(
             pool_name="sensor_pool",
-            pool_size=50,  # Tamaño del pool de conexiones
+            pool_size=32,  # Tamaño del pool de conexiones
             **config
         )
 
@@ -317,3 +317,43 @@ class MiSQL():
     #finaliza conexión.
     def cerrar(self):
         self.connection.close()
+
+    def eliminar_taxi(self, id_taxi):
+        """ 
+        Método para eliminar un taxi de la base de datos.
+        Primero elimina el token asociado al taxi y luego el taxi de la tabla de taxis.
+        
+        Parámetros:
+        id_taxi (int): El ID del taxi que se va a eliminar.
+        
+        Retorno:
+        dict: Un diccionario con el resultado de la operación.
+        """
+        connection = self.pool.get_connection()
+        cursor = connection.cursor()
+        resultado = {"success": False, "message": ""}
+        try:
+            # Eliminar el token asociado al taxi
+            query_eliminar_token = "DELETE FROM TOKENS WHERE ID = %s"
+            cursor.execute(query_eliminar_token, (id_taxi,))
+            
+            # Eliminar el taxi de la tabla TAXI
+            query_eliminar_taxi = "DELETE FROM TAXI WHERE ID_TAXI = %s"
+            cursor.execute(query_eliminar_taxi, (id_taxi,))
+            
+            # Confirmar la transacción
+            connection.commit()
+            
+            if cursor.rowcount > 0:
+                resultado["success"] = True
+                resultado["message"] = f"El taxi con ID {id_taxi} ha sido eliminado correctamente."
+            else:
+                resultado["message"] = f"El taxi con ID {id_taxi} no se encontró en la base de datos."
+        except mysql.connector.Error as e:
+            connection.rollback()  # Deshacer la transacción en caso de error
+            resultado["message"] = f"Error al eliminar el taxi con ID {id_taxi}: {e}"
+        finally:
+            cursor.close()
+            connection.close()
+        
+        return resultado

@@ -12,7 +12,7 @@ ip_central = config.get('Kafka', 'IP', fallback='192.168.1.140')  # Ajustar secc
 puerto_central = 5050  # Ajusta el puerto central aquí si es necesario
 ip_sensor = '127.0.0.1'  # IP de los sensores
 id_inicial = 1  # ID inicial de los taxis
-num_taxis = 5  # Cambia esto para ajustar la cantidad de taxis a iniciar
+num_taxis = 1  # Cambia esto para ajustar la cantidad de taxis a iniciar
 puerto_sensor_inicial = 9990  # Puerto de inicio para los sensores
 
 # Iniciar los procesos de taxis y sensores

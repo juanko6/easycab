@@ -264,7 +264,7 @@ def inicializar_consumer_servicios():
 def subscribir_a_servicio_taxi(taxi_id):
     #Suscribe el consumidor global a un nuevo topic de servicio de taxi
     topic = f"ST_{taxi_id}"    
-    print(f"Subsicrito a : {consumer_servicios.subscription()}")
+    print(f"Suscrito a : {consumer_servicios.subscription()}")
     if(consumer_servicios.subscription()):
         current_topics = set(consumer_servicios.subscription())
     else:
@@ -391,7 +391,8 @@ class ECCentral:
         self.ciudad = CIUDAD_SERVICIO
         self.app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "templates"))  # Inicializar Flask
         self.configurar_endpoints()  # Configurar los endpoints REST
-
+        self.temperatura = "No disponible"
+        self.estado_anterior = "OK"
         
         CORS(self.app, resources={r"/api/*": {"origins": "*"}})
 
@@ -446,17 +447,24 @@ class ECCentral:
                 clientes = [
                     {
                         "id": cliente[0],  # ID_CLIENTE
-                        "destino": [cliente[1], cliente[2]],  # DES_X, DES_Y
+                        "destino": [cliente[2], cliente[1]],  # DES_X, DES_Y
                         "estado": cliente[3],  # ESTADO
-                        "posicion": [cliente[4], cliente[5]]  # POS_X, POS_Y
+                        "posicion": [cliente[5], cliente[4]]  # POS_X, POS_Y
                     }
                     for cliente in clientes_resultados
                 ]
 
+
+                # Leer el archivo EC_locations.json para cargar las ubicaciones
+                with open('./EC_locations/EC_locations.json', 'r') as file:
+                    ubicaciones_data = json.load(file)
+                    ubicaciones = [{"id": u['Id'], "posicion": list(map(int, u['POS'].split(',')))} for u in ubicaciones_data['locations']]
+
                 # Retornar los datos en formato JSON
                 return {
                     "taxis": taxis,
-                    "clientes": clientes
+                    "clientes": clientes,
+                    "ubicaciones": ubicaciones
                 }, 200
 
             except Exception as e:
@@ -537,17 +545,16 @@ class ECCentral:
 
             if result.returncode != 0:
                 print(f"[ERROR] No se pudo conectar con EC_CTC: {result.stderr}")
+                self.estado_trafico = "KO"
                 return
 
             # Parsear la respuesta JSON
-            datos = json.loads(result.stdout)
-
-
+            datos_clima = json.loads(result.stdout)
 
             # Almacenar las variables "estado_trafico", "ciudad" y "temperatura"
-            self.estado_trafico = datos.get("estado_trafico", "KO")
-            self.ciudad = datos.get("ciudad", "Desconocida")
-            self.temperatura = datos.get("temperatura", "No disponible")
+            self.estado_trafico = datos_clima.get("estado_trafico", "KO")
+            self.ciudad = datos_clima.get("ciudad", "Desconocida")
+            self.temperatura = datos_clima.get("temperatura", "No disponible")
 
 
             print(f"[INFO] Estado del tráfico: {self.estado_trafico}")
@@ -565,9 +572,10 @@ class ECCentral:
         """Consulta el tráfico periódicamente y actualiza el estado en el sistema."""
         while True:
             self.consultar_trafico()
-            if self.estado_trafico == "KO":
+            if self.estado_trafico == "KO" and self.estado_anterior != "KO":
                 print("[ALERTA] Tráfico no viable. Notificando a los taxis.")
                 self.enviar_todos_a_base()
+            self.estado_anterior = self.estado_trafico
             time.sleep(INTERVALO_CONSULTA)
 
     def enviar_comando_taxi(self, taxi_id, posicion):
@@ -577,6 +585,7 @@ class ECCentral:
         self.producer.send(topic_taxi, value=mensaje.encode('utf-8'))
         self.producer.flush()
         print(f"[INFO] Comando enviado a {topic_taxi}: {mensaje}")
+        
 
     def enviar_todos_a_base(self):
         """
@@ -584,7 +593,7 @@ class ECCentral:
         """
         #taxis_disponibles = self.dashboard.taxis.keys()  # IDs de los taxis registrados
         for taxi_id in taxis_autenticados:
-            self.enviar_comando_taxi(taxi_id, (1, 1))
+            self.enviar_comando_taxi(taxi_id, (0, 0))
         print("[INFO] Todos los taxis enviados a la base.")
 #####
 ########## MAIN ##########
