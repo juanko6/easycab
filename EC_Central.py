@@ -33,7 +33,6 @@ DB_CUSTOMERS = "customer_db.txt"  # Fichero que actuará como base de datos para
 
 certfile = 'myCA/server.crt'
 keyfile = 'myCA/private.key'
-certkafka = 'myCA/kafka certificados/servkaf.crt'
 
 servicios_en_curso = {}  # Para trackear servicios activos
 consumer_servicios = None  # Consumer global para servicios
@@ -197,10 +196,6 @@ def consumir_posiciones_taxis():
     consumer = KafkaConsumer(
                     *current_topics,
                     bootstrap_servers=BOOTSTRAP_SERVER,
-                    security_protocol='SSL',
-                    ssl_cafile=certkafka,
-                    ssl_certfile=None,  # Si no usas autenticación mutua
-                    ssl_keyfile=None,   # Si no usas autenticación mutua
                     auto_offset_reset='earliest',
                     enable_auto_commit=True,
                     group_id="group_taxis"                    
@@ -252,10 +247,6 @@ def inicializar_consumer_servicios():
     global consumer_servicios
     consumer_servicios = KafkaConsumer(
         bootstrap_servers=BOOTSTRAP_SERVER,
-        security_protocol='SSL',
-        ssl_cafile=certkafka,
-        ssl_certfile=None,  # Si no usas autenticación mutua
-        ssl_keyfile=None,   # Si no usas autenticación mutua
         auto_offset_reset='latest',
         enable_auto_commit=True,
         group_id="group_Servicios_Global"
@@ -277,10 +268,6 @@ def subscribir_a_servicio_taxi(taxi_id):
 def consumir_solicitudes_clientes():         
     print("***Inicio hilo cliente***")       
     consumer = KafkaConsumer(f'Customer-Central',bootstrap_servers=BOOTSTRAP_SERVER, 
-                            security_protocol='SSL',
-                            ssl_cafile=certkafka,
-                            ssl_certfile=None,  # Si no usas autenticación mutua
-                            ssl_keyfile=None,   # Si no usas autenticación mutua
                             auto_offset_reset='latest',
                             enable_auto_commit=True,
                             group_id=f"group_Clientes")
@@ -304,11 +291,7 @@ def consumir_solicitudes_clientes():
 
 # Función para asignar un taxi a una solicitud
 def asignar_taxi(taxi_id, destino, posDetino, cliente_id, posCliente):
-    producer = KafkaProducer(
-        bootstrap_servers=BOOTSTRAP_SERVER,
-        security_protocol='SSL',
-        ssl_cafile=certkafka
-    )
+    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
     topic_taxi = f"TAXI_{taxi_id}"
     
     # 0 - Guardar cliente asignado en TAXI
@@ -362,11 +345,7 @@ def procesar_mensajes_servicios():
 
 # Función para enviar la respuesta al cliente
 def enviar_respuesta_cliente(cliente_id, respuesta):
-    producer = KafkaProducer(
-        bootstrap_servers=BOOTSTRAP_SERVER,
-        security_protocol='SSL',
-        ssl_cafile=certkafka
-    )    
+    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)    
     print(f"Enviando respuesta {respuesta} al cliente '{cliente_id}'")
     mensaje = f"{cliente_id}|{respuesta}"
     producer.send('Central-Customer', value=mensaje.encode('utf-8'))
@@ -383,11 +362,7 @@ class ECCentral:
     def __init__(self):
         self.estado_trafico = "OK"
 #        self.dashboard = dashboard  # Dashboard pasado desde el hilo principal
-        self.producer = KafkaProducer(
-            bootstrap_servers=BOOTSTRAP_SERVER,
-            security_protocol='SSL',
-            ssl_cafile=certkafka
-        )
+        self.producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
         self.ciudad = CIUDAD_SERVICIO
         self.app = Flask(__name__, template_folder=os.path.join(os.path.dirname(__file__), "templates"))  # Inicializar Flask
         self.configurar_endpoints()  # Configurar los endpoints REST
