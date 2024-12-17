@@ -23,6 +23,7 @@ class EC_DE:
         self.estado = "esperandoSensor"  # Estado inicial del taxi
         self.posicion = [10, 10]  # Inicializar la posición del taxi en (1,1)
         self.topic = f"TAXI_{self.ID}"
+        self.topicToken = f"Token_{self.ID}"
         self.sensor_conectado = False  # Estado de conexión del sensor
 
         # Crear Kafka Producer para enviar actulizaciones de estado y posición
@@ -54,32 +55,32 @@ class EC_DE:
             if self.token:
                 result = True
 
-            # # Enviar el ID del taxi para autenticarse usando conexión cifrada
-            # print(f"Enviando al servidor: Nuevo Taxi {self.ID}")
-            # send(ssock, f"Nuevo Taxi {self.ID}")
-
-            # msgResult = ssock.recv(2048).decode(FORMAT)
-            # print(f"Respuesta de la central: {msgResult}")
-
-            # result = int(msgResult)
-
-            # if result == 1:
-            #     print("Taxi autenticado correctamente.")
-            # elif result == 2:
-            #     print("Taxi con ID ya está autenticado.")
-            # elif result == -1:
-            #     print("ID de Taxi no registrado.")
-            # elif result == -3:
-            #     print("Mensaje de autenticación incorrecto.")
-            # else:
-            #     print("Error desconocido en la autenticación del taxi.")
-
             ssock.close()
         except Exception as e:
             print(f"Error al conectar con la central: {e}")
 
         return result
     
+    def comprobarToken(self):
+        """Comprobar que token si el token es incorrecto"""
+        consumer = KafkaConsumer(
+            self.topicToken,
+            bootstrap_servers=BOOTSTRAP_SERVER,
+            auto_offset_reset='latest',
+            enable_auto_commit=True,
+            group_id=f'group_{self.ID}'
+        )
+
+        for mensaje in consumer:
+            contenido  = mensaje.value.decode('utf-8')
+            if contenido == "TokenNotFound":
+                intentos = 0 
+                while not self.conectar_central(ADDR_CENTRAL, PASSWORD) and intentos < 3:
+                    intentos +=1
+                if intentos == 3:
+                    sys.exit(0)
+
+
     def escuchar_asignaciones(self):
         """Escuchar asignaciones de servicios y procesarlas"""
         consumer = KafkaConsumer(
@@ -93,7 +94,7 @@ class EC_DE:
 
         for mensaje in consumer:
             contenido  = mensaje.value.decode('utf-8')
-            print(f"[INFO] Taxi {self.ID} recibió mensaje: {contenido}")
+            #print(f"[INFO] Taxi {self.ID} recibió mensaje: {contenido}")   #Recibe sus propios mensajes
 
             # Comprobar si el mensaje es un comando
             if contenido.startswith("MOVER:"):
@@ -116,25 +117,6 @@ class EC_DE:
                 print(f"[EC_DE] Taxi {self.ID} recibió servicio: Ubicación Cliente {ubicacion_cliente}, Destino {destino}")
                 consumer.commit()
                 self.recibir_servicio(ubicacion_cliente, destino)
-
-    # def escuchar_asignaciones(self):
-    #     """Escuchar asignaciones de servicios y procesarlas"""
-    #     consumer = KafkaConsumer(
-    #         f"TAXI_{self.ID}",
-    #         bootstrap_servers=BOOTSTRAP_SERVER,
-    #         auto_offset_reset='earliest',
-    #         enable_auto_commit=True,
-    #         group_id=f'group_{self.ID}'
-    #     )
-    #     print(f"[EC_DE] Taxi {self.ID} escuchando asignaciones en topic TAXI_{self.ID}")
-
-    #     for mensaje in consumer:
-    #         servicio = mensaje.value.decode('utf-8')
-    #         if ";" in servicio:
-    #             ubicacion_cliente, destino = servicio.split(';')
-    #             print(f"[EC_DE] Taxi {self.ID} recibió servicio: Ubicación Cliente {ubicacion_cliente}, Destino {destino}")
-    #             consumer.commit()
-    #             self.recibir_servicio(ubicacion_cliente, destino)
 
     
 
@@ -346,7 +328,8 @@ def manejar_sensor(conn_sensor):
 # Función para enviar la posición y el estado del taxi a Kafka
 def enviar_posicion_estado_kafka(taxi_id, posicion, estado, producer, topic):
     mensaje = f"Taxi {taxi_id}: Posicion {posicion}, Estado {estado}"
-    producer.send(topic, value=mensaje.encode('utf-8'))
+    mensajeToken = mensaje + '~' + str(taxi_id) +"-"+ token
+    producer.send(topic, value=mensajeToken.encode('utf-8'))
     #print(f"Enviando posición y estado del taxi: {mensaje}")
     producer.flush()  # Asegura que el mensaje se envía inmediatamente
 
@@ -428,11 +411,13 @@ if len(sys.argv) == 7:
     SENSOR_PORT = int(sys.argv[5])  # Puerto del sensor (EC_S)
     PASSWORD = sys.argv[6]
 
+    token = None
     # Crear el taxi
     taxi = EC_DE(ID, BOOTSTRAP_SERVER)
 
     # Si la autenticación con la central es exitosa, iniciar el proceso de estados y sensor
     if taxi.conectar_central(ADDR_CENTRAL, PASSWORD):
+        token = taxi.token
         # Iniciar el manejo de señales para cerrar el taxi con Ctrl+C
         signal.signal(signal.SIGINT, signal_handler)
 
@@ -453,6 +438,10 @@ if len(sys.argv) == 7:
 
         # Crear hilo para escuchar asignaciones de servicio de la central
         hilo_escuchar_asignaciones = threading.Thread(target=taxi.escuchar_asignaciones, daemon=True)
+        hilo_escuchar_asignaciones.start()
+
+        # Crear hilo para escuchar estado token de la central
+        hilo_escuchar_asignaciones = threading.Thread(target=taxi.comprobarToken, daemon=True)
         hilo_escuchar_asignaciones.start()
 
 

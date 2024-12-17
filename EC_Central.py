@@ -205,20 +205,34 @@ def consumir_posiciones_taxis():
 
     for mensaje in consumer:
         contenido = mensaje.value.decode('utf-8')
-        if "Posicion" in contenido and "Estado" in contenido:
-            taxi_id_str, resto = contenido.split(": Posicion ")
-            taxi_id = int(taxi_id_str.split()[1])  # Obtener el ID del taxi
-            posicion_str, estado = resto.split(", Estado ")
-            posicion = list(map(int, posicion_str.strip('[]').split(',')))  # Convertir la posición a lista
+        if "~" in contenido:
+            mensaje, idToken = contenido.split("~")
+            idTaxi, token = idToken.split("-")
+            if Central_Secure.validar_token(idTaxi, token):
+                if "Posicion" in mensaje and "Estado" in mensaje:
+                    taxi_id_str, resto = mensaje.split(": Posicion ")
+                    taxi_id = int(taxi_id_str.split()[1])  # Obtener el ID del taxi
+                    posicion_str, estado = resto.split(", Estado ")
+                    posicion = list(map(int, posicion_str.strip('[]').split(',')))  # Convertir la posición a lista
 
-            # Actualizar la lista de taxis disponibles
-            if taxi_id in taxis_disponibles and estado != "Disponible":   
-                taxis_disponibles.discard(taxi_id)
-            elif taxi_id not in taxis_disponibles and estado == "Disponible":
-                taxis_disponibles.add(taxi_id)
+                    # Actualizar la lista de taxis disponibles
+                    if taxi_id in taxis_disponibles and estado != "Disponible":   
+                        taxis_disponibles.discard(taxi_id)
+                    elif taxi_id not in taxis_disponibles and estado == "Disponible":
+                        taxis_disponibles.add(taxi_id)
 
-            guardar_taxi_SQL(taxi_id, posicion, estado, True)  # Guardar estado en SQL
-            taxis_caidos[taxi_id] = 0 #Para indicar que seguimos recibiendo conexión.
+                    guardar_taxi_SQL(taxi_id, posicion, estado, True)  # Guardar estado en SQL
+                    taxis_caidos[taxi_id] = 0 #Para indicar que seguimos recibiendo conexión.
+            else:
+                print("Token no valido")
+                enviarTokenNotfound(idTaxi)
+
+def enviarTokenNotfound(taxi_id):
+    producer = KafkaProducer(bootstrap_servers=BOOTSTRAP_SERVER)
+    topic = f"Token_{taxi_id}"
+    producer.send(topic, value="TokenNotFound".encode('utf-8'))
+    producer.flush()
+
 
 # Para comprobar que si el taxi se ha desconectado.
 # Ponemos valores a 1, si la siguiente vez que se compruebe sigue igual es que no hemos recibido cambios de estado
@@ -585,7 +599,8 @@ if __name__ == "__main__":
     print(f"***** [EC_Central] ***** Iniciando con IP: {IP_CENTRAL} y Puerto: {PORT_CENTRAL}")
 
     # Inicializar base de datos
-    sql = miSQL.MiSQL()
+    sql = miSQL.MiSQL()    
+    sql.EliminarTokens()
     # Cargar los taxis al iniciar la central
     cargar_taxis_SQL()
 

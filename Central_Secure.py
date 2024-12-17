@@ -11,9 +11,9 @@ def generar_token():
     return hashlib.sha256(os.urandom(64)).hexdigest()
 
 # Función para validar un token, Devuelve el id_taxi hay que comprobar que es el taxi correcto.
-def validar_token(token):
+def validar_token(id, token):
     sql = miSQL.MiSQL()
-    return sql.verificar_token(token)
+    return sql.verificar_token(id, token)
 
 # Función para aunteticar taxi y devolver token.
 def autenticar_taxi(cliente_socket, addr):

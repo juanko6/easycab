@@ -19,6 +19,7 @@ class MiSQL():
             **config
         )
 
+
     # Método para hacer consultas genericas pasandole la query por parametro y devolviendo una lista de registros como resultado.
     def consulta(self, query):
         # Obtener una conexión del pool
@@ -294,25 +295,28 @@ class MiSQL():
             cursor.close()
             connection.close()
 
-    def verificar_token(self, token):
+    def verificar_token(self, id, token):
         # Obtener una conexión del pool
         connection = self.pool.get_connection()
         cursor = connection.cursor()
-        query = "SELECT ID FROM TOKENS WHERE TOKEN = %s AND EXPIRATION > NOW()"
+        query = "SELECT ID FROM TOKENS WHERE TOKEN = %s AND ID = %s"
 
         try:
-            cursor.execute(query, (token,))
-            result = cursor.fetchone()
+            cursor.execute(query, (token,id))
+            resultado = cursor.fetchone()
+            if resultado is not None:
+                existe = True
+            else:
+                existe = False
+
         except mysql.connector.Error as e:
             print(f"Error de MySQL: {e}")
-        finally:            
+            existe = False
+        finally:
             cursor.close()
             connection.close()
 
-        if result is not None:
-            return result[0]
-        else:
-            return None
+        return existe
 
     #finaliza conexión.
     def cerrar(self):
@@ -357,3 +361,19 @@ class MiSQL():
             connection.close()
         
         return resultado
+    
+
+    def EliminarTokens(self):
+        # Obtener una conexión del pool
+        connection = self.pool.get_connection()
+        cursor = connection.cursor()
+        try:
+            query = f"DELETE FROM TOKENS"
+
+            cursor.execute(query)
+            connection.commit()
+        except mysql.connector.Error as e:
+            print(f"Error de MySQL: {e}")        
+        finally:
+            cursor.close()
+            connection.close() 
