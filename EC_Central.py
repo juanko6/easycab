@@ -196,7 +196,7 @@ def consumir_posiciones_taxis():
     consumer = KafkaConsumer(
                     *current_topics,
                     bootstrap_servers=BOOTSTRAP_SERVER,
-                    auto_offset_reset='earliest',
+                    auto_offset_reset='latest',
                     enable_auto_commit=True,
                     group_id="group_taxis"                    
                 )   
@@ -205,6 +205,8 @@ def consumir_posiciones_taxis():
 
     for mensaje in consumer:
         contenido = mensaje.value.decode('utf-8')
+        consumer.commit()
+        print(contenido)
         if "~" in contenido:
             mensaje, idToken = contenido.split("~")
             idTaxi, token = idToken.split("-")

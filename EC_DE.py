@@ -63,6 +63,7 @@ class EC_DE:
     
     def comprobarToken(self):
         """Comprobar que token si el token es incorrecto"""
+        global token
         consumer = KafkaConsumer(
             self.topicToken,
             bootstrap_servers=BOOTSTRAP_SERVER,
@@ -74,10 +75,15 @@ class EC_DE:
         for mensaje in consumer:
             contenido  = mensaje.value.decode('utf-8')
             if contenido == "TokenNotFound":
+                token = None
                 intentos = 0 
-                while not self.conectar_central(ADDR_CENTRAL, PASSWORD) and intentos < 3:
+                conectado = False
+                while not conectado and intentos < 3:
+                    if  self.conectar_central(ADDR_CENTRAL, PASSWORD) :
+                        conectado = True
+                        token = self.token
                     intentos +=1
-                if intentos == 3:
+                if not conectado:
                     sys.exit(0)
 
 
@@ -191,7 +197,7 @@ class EC_DE:
                     self.estado = "KO"
                     
             enviar_posicion_estado_kafka(self.ID, self.posicion, self.estado, self.producer, self.topic)
-            time.sleep(1)
+            time.sleep(2)
 
 
     def mover_hacia(self, dest_x, dest_y):
@@ -253,14 +259,14 @@ def manejar_sensor(conn_sensor):
                 print("Sensor desconectado.")
                 taxi.estado = "esperandoSensor"
                 taxi.sensor_conectado = False
-                enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+                #enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
                 break
 
             if estado_sensor == "<EOT>":
                 print("Sensor envió <EOT>. Finalizando comunicación.")
                 taxi.estado = "esperandoSensor"
                 taxi.sensor_conectado = False
-                enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+                #enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
                 break
 
             print(f"Estado recibido del sensor: {estado_sensor}")
@@ -288,7 +294,7 @@ def manejar_sensor(conn_sensor):
 
                 # Confirmar y enviar el estado actualizado a EC_Central
                 print(f"Taxi {taxi.ID}: Posicion {taxi.posicion}, Estado {taxi.estado}")
-                enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+                #enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
 
                 
                 # Guardar el estado en un fichero
@@ -303,21 +309,21 @@ def manejar_sensor(conn_sensor):
             print("Timeout: No se recibió un mensaje del sensor.")
             taxi.estado = "esperandoSensor"
             taxi.sensor_conectado = False
-            enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+            #enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
             break
 
         except ConnectionResetError:
             print("Conexión perdida con el sensor.")
             taxi.estado = "esperandoSensor"
             taxi.sensor_conectado = False
-            enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+            #enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
             break
 
         except Exception as e:
             print(f"Error al recibir estado del sensor: {e}")
             taxi.estado = "esperandoSensor"
             taxi.sensor_conectado = False
-            enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
+            #enviar_posicion_estado_kafka(taxi.ID, taxi.posicion, taxi.estado, taxi.producer, taxi.topic)
             break
         
     conn_sensor.close()
@@ -328,10 +334,11 @@ def manejar_sensor(conn_sensor):
 # Función para enviar la posición y el estado del taxi a Kafka
 def enviar_posicion_estado_kafka(taxi_id, posicion, estado, producer, topic):
     mensaje = f"Taxi {taxi_id}: Posicion {posicion}, Estado {estado}"
-    mensajeToken = mensaje + '~' + str(taxi_id) +"-"+ token
-    producer.send(topic, value=mensajeToken.encode('utf-8'))
-    #print(f"Enviando posición y estado del taxi: {mensaje}")
-    producer.flush()  # Asegura que el mensaje se envía inmediatamente
+    if token != None:
+        mensajeToken = mensaje + '~' + str(taxi_id) +"-"+ token
+        producer.send(topic, value=mensajeToken.encode('utf-8'))
+        #print(f"Enviando posición y estado del taxi: {mensaje}")
+        producer.flush()  # Asegura que el mensaje se envía inmediatamente
 
 # Función para leer el estado del sensor desde el archivo identificado por el ID del taxi
 def leer_estado_sensor(taxi_id):
